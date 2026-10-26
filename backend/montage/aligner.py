@@ -93,8 +93,26 @@ def align(paragraphs: list[dict], words: list[dict], duration: float | None = No
     return timings
 
 
+DEFAULT_SECONDS_PER_WORD = 0.42  # الكلام المصري العادي: حوالي كلمتين ونص في الثانية
+
+
+def _seconds_per_word(timings: list[ParagraphTiming]) -> float:
+    """سرعة كلام المتكلم من الفقرات اللي اتطابقت."""
+    matched = [t for t in timings if not t.estimated and t.total]
+    words = sum(t.total for t in matched)
+    seconds = sum(t.end - t.start for t in matched)
+    if words < 20 or seconds <= 0:
+        return DEFAULT_SECONDS_PER_WORD
+    return min(max(seconds / words, 0.25), 0.8)
+
+
 def _fill_estimates(timings: list[ParagraphTiming], duration: float) -> None:
-    """يقدّر وقت الفقرات اللي ماتطابقتش، ويضمن إن الأوقات ماشية لقدام."""
+    """يقدّر وقت الفقرات اللي ماتطابقتش، ويضمن إن الأوقات ماشية لقدام.
+
+    الفقرات اللي في الآخر بعد آخر فقرة اتطابقت بتاخد وقت على قد سرعة كلامه،
+    مش بتتكبس في الثواني الفاضلة. فلو التسجيل أقصر من السكريبت، الفقرات
+    اللي ماتقالتش هيطلع وقتها بعد نهاية التسجيل (ولقطاتها ماتتحطش).
+    """
     last_end = 0.0
     for t in timings:  # أي فقرة متطابقة بترجع لورا تتعامل كأنها ماتطابقتش
         if not t.estimated:
@@ -113,10 +131,24 @@ def _fill_estimates(timings: list[ParagraphTiming], duration: float) -> None:
         while j < n and timings[j].estimated:
             j += 1
         left = timings[i - 1].end if i > 0 else 0.0
+        weights = [max(t.total, 1) for t in timings[i:j]]
+        if j == n and i > 0:  # فقرات في الآخر بعد آخر حاجة اتطابقت
+            rate = _seconds_per_word(timings)
+            cursor = left
+            for t, weight in zip(timings[i:j], weights):
+                t.start, t.end = cursor, cursor + weight * rate
+                cursor = t.end
+            # لو خلصوا قبل نهاية التسجيل، نوزّع الوقت الزيادة عليهم
+            if cursor < duration:
+                stretch = (duration - left) / (cursor - left)
+                for t in timings[i:j]:
+                    t.start = left + (t.start - left) * stretch
+                    t.end = left + (t.end - left) * stretch
+            i = j
+            continue
         right = timings[j].start if j < n else duration
         if right < left:
             right = left
-        weights = [max(t.total, 1) for t in timings[i:j]]
         total_weight = sum(weights)
         cursor = left
         for t, weight in zip(timings[i:j], weights):

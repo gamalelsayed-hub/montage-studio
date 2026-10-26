@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fileUrl, formatTime } from "../api";
-import type { Aspect, Clip, Script, Timeline } from "../types";
+import type { Aspect, Caption, Clip, Script, Timeline } from "../types";
 import Inspector from "./Inspector";
-import Preview from "./Preview";
+import Preview, { type PreviewBrand } from "./Preview";
+import SidePanel from "./SidePanel";
 import TimelineView, { type Selection } from "./TimelineView";
-import { addClipAt, addCut, keptDuration, removeClip, removeCut, round, skipCuts, updateClip } from "./timelineOps";
+import {
+  addClipAt, addCut, keptDuration, removeCaption, removeClip, removeCut, round, skipCuts, updateCaption,
+  updateClip,
+} from "./timelineOps";
 import { useHistory } from "./useHistory";
 
 interface Props {
   projectId: string;
   initial: Timeline;
   script: Script | null;
+  pages: Record<string, string>;
+  onPagesChange: (pages: Record<string, string>) => void;
+  brand?: PreviewBrand;
   exports: string[];
   busy: boolean;
   lastExport: string | null;
@@ -18,7 +25,9 @@ interface Props {
   onFetchMedia: () => void;
 }
 
-export default function Editor({ projectId, initial, script, exports, busy, lastExport, onExport, onFetchMedia }: Props) {
+export default function Editor({
+  projectId, initial, script, pages, onPagesChange, brand, exports, busy, lastExport, onExport, onFetchMedia,
+}: Props) {
   const history = useHistory<Timeline>(initial);
   const timeline = history.present;
   const base = `/api/projects/${encodeURIComponent(projectId)}`;
@@ -81,6 +90,7 @@ export default function Editor({ projectId, initial, script, exports, busy, last
     if (media) media.volume = Math.min(1, timeline.base.volume);
   }, [timeline.base.volume]);
 
+
   const togglePlay = useCallback(() => {
     const media = mediaRef.current;
     if (!media) return;
@@ -104,6 +114,7 @@ export default function Editor({ projectId, initial, script, exports, busy, last
 
   const changeClip = (clip: Clip, changes: Partial<Clip>) => {
     const next = { ...changes };
+    if (next.start !== undefined || next.end !== undefined) next.estimated = false;
     if (next.start !== undefined) next.start = round(Math.min(next.start, (next.end ?? clip.end) - 0.5));
     if (next.end !== undefined) next.end = round(Math.min(Math.max(next.end, (next.start ?? clip.start) + 0.5), timeline.duration));
     history.set((t) => updateClip(t, clip.id, next));
@@ -111,9 +122,16 @@ export default function Editor({ projectId, initial, script, exports, busy, last
 
   const deleteSelection = useCallback(() => {
     if (!selection) return;
-    history.set((t) => (selection.type === "clip" ? removeClip(t, selection.id) : removeCut(t, selection.id)));
+    history.set((t) =>
+      selection.type === "clip" ? removeClip(t, selection.id)
+        : selection.type === "caption" ? removeCaption(t, selection.id)
+          : removeCut(t, selection.id));
     setSelection(null);
   }, [selection, history]);
+
+  const selectedCaption = selection?.type === "caption" ? timeline.captions.find((c) => c.id === selection.id) ?? null : null;
+  const selectedCut = selection?.type === "cut" ? timeline.cuts.find((c) => c.id === selection.id) ?? null : null;
+  const changeCaption = (caption: Caption, changes: Partial<Caption>) => history.set((t) => updateCaption(t, caption.id, changes));
 
   const addClip = () => {
     const result = addClipAt(latest.current, time);
@@ -201,7 +219,7 @@ export default function Editor({ projectId, initial, script, exports, busy, last
       <div className="editor-top">
         <div className="preview-col">
           <Preview ref={mediaRef} projectId={projectId} timeline={timeline} time={time} playing={playing}
-            paragraphText={paragraphText} cueText={cueText} />
+            paragraphText={paragraphText} cueText={cueText} brand={brand} />
           <div className="transport">
             <button className="primary round" onClick={togglePlay} title="مسافة">{playing ? "⏸" : "▶"}</button>
             <span className="clock" dir="ltr">{formatTime(time, true)} / {formatTime(timeline.duration)}</span>
@@ -215,28 +233,42 @@ export default function Editor({ projectId, initial, script, exports, busy, last
             <Inspector key={selectedClip.id} projectId={projectId} clip={selectedClip}
               onChange={(changes) => changeClip(selectedClip, changes)}
               onDelete={deleteSelection} />
-          ) : selection?.type === "cut" ? (
+          ) : selectedCut ? (
             <div className="inspector">
-              <h3>✂️ جزء مقصوص</h3>
-              <p className="muted">الجزء ده مش هيظهر في الفيديو النهائي.</p>
-              <button onClick={deleteSelection}>↩️ رجّع الجزء ده</button>
+              <h3>✂️ {selectedCut.auto === "silence" ? "سكتة مقصوصة" : selectedCut.auto === "retake" ? "لغبطة مقصوصة" : "جزء مقصوص"}</h3>
+              <p className="muted">
+                الجزء ده ({formatTime(selectedCut.end - selectedCut.start, true)}) مش هيظهر في الفيديو النهائي.
+                {selectedCut.auto === "retake" && " البرنامج لقاك قلت الجملة دي مرتين، فشال المحاولة الأولى."}
+              </p>
+              <div className="row">
+                <button onClick={() => seek(Math.max(selectedCut.start - 1.5, 0))}>▶ اسمع اللي حواليه</button>
+                <button onClick={deleteSelection}>↩️ رجّع الجزء ده</button>
+              </div>
+            </div>
+          ) : selectedCaption ? (
+            <div className="inspector">
+              <div className="card-head">
+                <h3>💬 سطر ترجمة</h3>
+                <button className="danger ghost" onClick={deleteSelection}>🗑️ امسح السطر</button>
+              </div>
+              <textarea className="desc" dir="rtl" rows={3} value={selectedCaption.text}
+                onChange={(e) => changeCaption(selectedCaption, { text: e.target.value })} />
+              <div className="row times">
+                <label>من (ثانية)
+                  <input type="number" step="0.1" value={selectedCaption.start}
+                    onChange={(e) => changeCaption(selectedCaption, { start: Math.max(0, Number(e.target.value)) })} />
+                </label>
+                <label>لحد (ثانية)
+                  <input type="number" step="0.1" value={selectedCaption.end}
+                    onChange={(e) => changeCaption(selectedCaption, { end: Math.max(0, Number(e.target.value)) })} />
+                </label>
+              </div>
+              <p className="hint small">شكل الترجمة (الخط واللون والمكان) من «💬 الترجمة» لما تقفل الاختيار.</p>
+              <button className="ghost" onClick={() => setSelection(null)}>قفل</button>
             </div>
           ) : (
-            <div className="inspector help">
-              <h3>إزاي تعدّل</h3>
-              <ul>
-                <li>اضغط على أي لقطة فوق عشان تبدّلها أو تغيّر وقتها.</li>
-                <li>اسحب اللقطة عشان تحرّكها، واسحب طرفها عشان تطوّلها أو تقصّرها.</li>
-                <li>القص: حط المؤشر عند البداية واضغط «بداية القص» (أو I)، وبعدين عند النهاية واضغط «نهاية القص» (أو O).</li>
-                <li>مسافة = تشغيل/إيقاف · Ctrl+Z = تراجع · Delete = مسح المختار · الأسهم = ثانية لقدام/لورا.</li>
-              </ul>
-              {emptyClips > 0 && (
-                <p className="warn">
-                  فيه {emptyClips} لقطة فاضية.{" "}
-                  <button className="link" onClick={fetchNow} disabled={busy}>هات اللقطات</button>
-                </p>
-              )}
-            </div>
+            <SidePanel projectId={projectId} timeline={timeline} pages={pages} emptyClips={emptyClips} busy={busy}
+              onChange={(update) => history.set(update)} onPagesChange={onPagesChange} onFetchMedia={fetchNow} />
           )}
         </div>
       </div>

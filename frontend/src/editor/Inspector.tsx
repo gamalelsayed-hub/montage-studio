@@ -74,6 +74,15 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
         <h3>{clip.kind === "video" ? "🎞️ لقطة فيديو" : "🖼️ صورة"}</h3>
         <button className="danger ghost" onClick={onDelete}>🗑️ امسح اللقطة</button>
       </div>
+      {clip.estimated && (
+        <div className="estimate-note">
+          ⚠️ الكلام اللي اللقطة دي مربوطة بيه ماتلقاش في التسجيل، فمكانها متقدّر. اسمع واتأكد إنها في المكان الصح.{" "}
+          <button className="link" onClick={() => onChange({ estimated: false })}>✓ راجعتها</button>
+        </div>
+      )}
+      {clip.page !== null && clip.page !== undefined && (
+        <p className="muted small">📄 صورة صفحة {clip.page} من اللوحة. بتظهر كاملة فوق نسخة مضببة منها.</p>
+      )}
       <textarea className="desc" value={clip.description} rows={2}
         onChange={(e) => onChange({ description: e.target.value })} />
 
@@ -88,6 +97,13 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
       </div>
 
       {clip.media?.kind === "image" && (
+        <label className="check">
+          <input type="checkbox" checked={clip.fit === "contain"}
+            onChange={(e) => onChange({ fit: e.target.checked ? "contain" : "cover" })} />
+          اعرض الصورة كاملة من غير قص (مناسب للصفحات والجداول)
+        </label>
+      )}
+      {clip.media?.kind === "image" && clip.fit !== "contain" && (
         <label className="check">
           <input type="checkbox" checked={clip.motion === "zoom_in"}
             onChange={(e) => onChange({ motion: e.target.checked ? "zoom_in" : "none" })} />

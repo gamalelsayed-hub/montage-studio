@@ -7,7 +7,8 @@ projects/<id>/
   audio.wav        صوت للتفريغ
   transcript.json  التفريغ بالتوقيت
   timeline.json    التايم لاين
-  media/           اللقطات المنزّلة
+  media/           اللقطات المنزّلة، وصور الصفحات (page_N.png)
+  captions.ass     ملف الترجمة اللي بيتعمل وقت التصدير
   exports/         الفيديوهات المصدّرة
 """
 
@@ -92,3 +93,22 @@ RECORDING_TYPES = {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v", ".mp3", ".wa
 def find_recording(path: Path) -> Path | None:
     """التسجيل الأصلي (من غير recording.json اللي فيه معلوماته)."""
     return next((p for p in sorted(path.glob("recording.*")) if p.suffix.lower() in RECORDING_TYPES), None)
+
+
+PAGE_TYPES = (".png", ".jpg", ".jpeg", ".webp")
+_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+
+def page_number(file_name: str) -> int | None:
+    """رقم الصفحة من اسم الملف: «صفحة 3.png» أو «page_03.jpg» أو «٣.png»."""
+    match = re.search(r"\d+", Path(file_name).stem.translate(_DIGITS))
+    return int(match.group(0)) if match else None
+
+
+def list_pages(path: Path) -> dict[int, dict]:
+    pages: dict[int, dict] = {}
+    for file in sorted((path / "media").glob("page_*")):
+        number = page_number(file.name)
+        if number is not None and file.suffix.lower() in PAGE_TYPES:
+            pages[number] = {"file": file.name, "kind": "image", "source": "page"}
+    return pages

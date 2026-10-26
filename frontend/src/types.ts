@@ -44,6 +44,9 @@ export interface Clip {
   end: number;
   motion: "zoom_in" | "none" | null;
   volume: number;
+  fit: "cover" | "contain";
+  estimated: boolean; // الفقرة بتاعتها ماتلقتش في التسجيل، فوقتها متقدّر
+  page: number | null; // صورة صفحة اللوحة رقم N
   media: ClipMedia | null;
   candidates: Candidate[];
 }
@@ -52,6 +55,24 @@ export interface Cut {
   id: string;
   start: number;
   end: number;
+  auto?: "silence" | "retake" | null;
+}
+
+export interface Caption {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface CaptionStyle {
+  enabled: boolean;
+  font: string;
+  size: number;
+  color: string;
+  box: boolean;
+  box_color: string;
+  position: "bottom" | "middle" | "top";
 }
 
 export interface Marker {
@@ -65,10 +86,13 @@ export interface Timeline {
   version: number;
   aspect: Aspect;
   duration: number;
-  base: { file: string; preview: string; has_video: boolean; volume: number };
+  base: { file: string; preview: string; has_video: boolean; volume: number; clean_audio: boolean };
   cuts: Cut[];
   clips: Clip[];
   markers: Marker[];
+  captions: Caption[];
+  caption_style: CaptionStyle;
+  brand: { logo: boolean; title: boolean };
 }
 
 export interface Script {
@@ -98,6 +122,7 @@ export interface ProjectData {
   has_transcript: boolean;
   alignment: { paragraph_id: string; start: number; end: number; estimated: boolean; ratio: number }[] | null;
   timeline: Timeline | null;
+  pages: Record<string, string>; // رقم الصفحة ← اسم الملف في media/
   exports: string[];
   jobs: Job[];
 }

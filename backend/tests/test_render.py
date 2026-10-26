@@ -92,3 +92,42 @@ def test_falls_back_to_cpu_encoder(tmp_path, monkeypatch):
     monkeypatch.setattr(render_module, "hardware_encoders", lambda: ["h264_qsv"])  # مافيش كارت في بيئة الاختبار
     out = render(_timeline(), tmp_path, tmp_path / "out.mp4")
     assert probe(out)["has_video"]
+
+
+def _v2_inputs(tmp_path):
+    _make_inputs(tmp_path, False)
+    ff = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    subprocess.run(ff + ["-f", "lavfi", "-i", "color=c=red:s=300x120", "-frames:v", "1",
+                         str(tmp_path / "logo.png")], check=True)
+    timeline = _timeline()
+    timeline["base"]["clean_audio"] = True
+    timeline["clips"][0]["fit"] = "contain"
+    return timeline
+
+
+@needs_ffmpeg
+def test_v2_command_parts(tmp_path):
+    timeline = _v2_inputs(tmp_path)
+    (tmp_path / "c.ass").write_text("[Script Info]\n", encoding="utf-8")
+    args = build_command(timeline, tmp_path, tmp_path / "o.mp4", subtitles=tmp_path / "c.ass",
+                         fonts_dir=tmp_path, logo={"file": tmp_path / "logo.png"})
+    graph = args[args.index("-filter_complex") + 1]
+    assert "afftdn" in graph and "loudnorm=I=-16" in graph
+    assert "boxblur" in graph and "force_original_aspect_ratio=decrease" in graph
+    assert "ass='" in graph and ":shaping=complex" in graph
+    assert "sidechaincompress" not in graph  # مافيش موسيقى
+    assert "overlay=W-w-43:43" in graph
+
+
+@needs_ffmpeg
+def test_v2_real_render_with_captions(tmp_path):
+    from montage.captions import FONTS_DIR, write_ass
+
+    timeline = _v2_inputs(tmp_path)
+    ass = write_ass(tmp_path / "captions.ass", [{"id": "c", "start": 0.2, "end": 4.0, "text": "فلوسك حلال ولا حرام؟"}],
+                    {}, 1080, 1920)
+    out = render(timeline, tmp_path, tmp_path / "out.mp4", subtitles=ass, fonts_dir=FONTS_DIR,
+                 logo={"file": tmp_path / "logo.png", "position": "bottom-left"})
+    info = probe(out)
+    assert info["has_video"] and info["has_audio"]
+    assert abs(info["duration"] - 5.0) < 0.3

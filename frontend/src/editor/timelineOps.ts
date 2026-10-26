@@ -1,4 +1,4 @@
-import type { Clip, Cut, Timeline } from "../types";
+import type { Caption, Clip, Cut, Timeline } from "../types";
 
 export const MIN_CLIP = 0.5;
 
@@ -29,7 +29,8 @@ export function moveClip(timeline: Timeline, clip: Clip, newStart: number): Time
   const [min, max] = neighbourBounds(timeline, clip.id);
   const length = clip.end - clip.start;
   const start = Math.min(Math.max(newStart, min), Math.max(max - length, min));
-  return updateClip(timeline, clip.id, { start: round(start), end: round(Math.min(start + length, max)) });
+  // لو حرّكها بإيده يبقى راجع مكانها
+  return updateClip(timeline, clip.id, { start: round(start), end: round(Math.min(start + length, max)), estimated: false });
 }
 
 export function resizeClip(timeline: Timeline, clip: Clip, edge: "start" | "end", value: number): Timeline {
@@ -70,6 +71,9 @@ export function addClipAt(timeline: Timeline, time: number): { timeline: Timelin
     end: round(Math.min(start + 4, gapEnd)),
     motion: "zoom_in",
     volume: 0,
+    fit: "cover",
+    estimated: false,
+    page: null,
     media: null,
     candidates: [],
   };
@@ -115,4 +119,26 @@ export function keptDuration(timeline: Timeline): number {
     cursor = Math.max(cursor, e);
   }
   return timeline.duration - removed;
+}
+
+/** القص التلقائي الجديد مكان القديم (القص اللي عمله بإيده بيفضل). */
+export function replaceAutoCuts(timeline: Timeline, cuts: Cut[]): Timeline {
+  return { ...timeline, cuts: [...timeline.cuts.filter((c) => !c.auto), ...cuts] };
+}
+
+export function removeAutoCuts(timeline: Timeline): Timeline {
+  return { ...timeline, cuts: timeline.cuts.filter((c) => !c.auto) };
+}
+
+export function activeCaption(timeline: Timeline, time: number): Caption | null {
+  if (!timeline.caption_style.enabled) return null;
+  return timeline.captions.find((c) => time >= c.start && time < c.end) ?? null;
+}
+
+export function updateCaption(timeline: Timeline, id: string, changes: Partial<Caption>): Timeline {
+  return { ...timeline, captions: timeline.captions.map((c) => (c.id === id ? { ...c, ...changes } : c)) };
+}
+
+export function removeCaption(timeline: Timeline, id: string): Timeline {
+  return { ...timeline, captions: timeline.captions.filter((c) => c.id !== id) };
 }

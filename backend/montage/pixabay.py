@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from .content_rules import is_allowed
-from .stock import StockError
+from .stock import RETRY_WAITS, StockError
 
 API = "https://pixabay.com/api/"
 
@@ -24,10 +26,14 @@ def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: 
     else:
         url = API
         params.update(image_type="photo", orientation="vertical" if aspect == "9:16" else "horizontal")
-    try:
-        response = httpx.get(url, params=params, timeout=20)
-    except httpx.HTTPError as exc:
-        raise StockError(f"مش قادر أوصل لـ Pixabay: {exc}") from exc
+    for wait in (*RETRY_WAITS[:2], None):
+        try:
+            response = httpx.get(url, params=params, timeout=20)
+        except httpx.HTTPError as exc:
+            raise StockError(f"مش قادر أوصل لـ Pixabay: {exc}") from exc
+        if response.status_code != 429 or wait is None:
+            break
+        time.sleep(wait)
     if response.status_code in (400, 401, 403) and "key" in response.text.lower():
         raise StockError("مفتاح Pixabay غلط.")
     if response.status_code == 429:

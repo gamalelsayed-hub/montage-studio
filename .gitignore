@@ -22,3 +22,8 @@ dist/
 *.part
 .pytest_cache/
 tools/
+
+# اللوجو بتاع قالب الهوية وسجلات البرنامج
+brand/
+logs/
+.edge-profile/

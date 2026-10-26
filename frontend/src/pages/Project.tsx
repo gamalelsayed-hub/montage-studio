@@ -15,6 +15,7 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
   const [editorKey, setEditorKey] = useState(0); // بيتغير لما التايم لاين يتعمل من جديد على السيرفر
   const fileInput = useRef<HTMLInputElement>(null);
   const recordingInput = useRef<HTMLInputElement>(null);
+  const pagesInput = useRef<HTMLInputElement>(null);
 
   const base = `/api/projects/${encodeURIComponent(projectId)}`;
 
@@ -79,6 +80,23 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
     }
   };
 
+  const uploadPages = async (files: FileList) => {
+    setError("");
+    const form = new FormData();
+    Array.from(files).forEach((f) => form.append("files", f));
+    try {
+      const response = await fetch(`${base}/pages`, { method: "POST", body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || `خطأ ${response.status}`);
+      if (result.skipped?.length) setError(`ماعرفتش رقم الصفحة من اسم الملف: ${result.skipped.join("، ")}. سمّي الملف برقم الصفحة، مثلًا 3.png`);
+      setPages(result.pages);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const setPages = (pages: Record<string, string>) => setData((d) => (d ? { ...d, pages } : d));
+
   const startJob = async (path: string, body: unknown = {}) => {
     setError("");
     setLastResult(null);
@@ -121,7 +139,10 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
       )}
       {lastResult?.kind === "process" && (
         <div className="result">
-          ✓ اتطابق {lastResult.result.matched} من {lastResult.result.paragraphs} فقرة، واتحطت {lastResult.result.clips} لقطة.
+          ✓ اتطابق {lastResult.result.matched} من {lastResult.result.paragraphs} فقرة، واتحطت {lastResult.result.clips} لقطة
+          {lastResult.result.pages ? ` و${lastResult.result.pages} صفحة` : ""}
+          {lastResult.result.cuts ? `، واتقص ${lastResult.result.cuts} سكتة/لغبطة` : ""}
+          {lastResult.result.captions ? `، واتعمل ${lastResult.result.captions} سطر ترجمة` : ""}.
           {lastResult.result.warnings?.map((w: string) => <div key={w} className="warn">⚠️ {w}</div>)}
         </div>
       )}
@@ -172,9 +193,23 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
           </section>
 
           <section className="card">
+            <div className="card-head">
+              <h2>صور صفحات اللوحة (اختياري)</h2>
+              <button className="ghost" onClick={() => pagesInput.current?.click()}>📄 ارفع الصور</button>
+              <input ref={pagesInput} type="file" accept="image/*" multiple hidden
+                onChange={(e) => e.target.files?.length && uploadPages(e.target.files)} />
+            </div>
+            <p className="muted small">
+              كل صورة بتظهر في أول القسم «## صفحة N» بتاعها. سمّي الصور بأرقام الصفحات (1.png و2.png …).
+              {Object.keys(data.pages ?? {}).length > 0 && ` مرفوع: صفحة ${Object.keys(data.pages).sort((a, b) => Number(a) - Number(b)).join("، ")}.`}
+            </p>
+          </section>
+
+          <section className="card">
             <h2>التجهيز الأوتوماتيك</h2>
             <p className="muted">
-              البرنامج هيفرّغ كلامك، ويطابقه مع السكريبت، ويجيب لكل [صورة] و[فيديو] لقطة من Pixabay ويحطها في ثانيتها.
+              البرنامج هيفرّغ كلامك، ويطابقه مع السكريبت، ويجيب لكل [صورة] و[فيديو] لقطة من Pixabay ويحطها في ثانيتها،
+              ويقص السكتات واللغبطة، ويعمل الترجمة، ويحط صور الصفحات.
             </p>
             {data.alignment && (
               <p className="muted">آخر مطابقة: {matched} من {data.alignment.length} فقرة اتلقت في التسجيل.</p>
@@ -210,6 +245,8 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
           projectId={projectId}
           initial={data.timeline}
           script={data.script}
+          pages={data.pages ?? {}}
+          onPagesChange={setPages}
           exports={data.exports}
           busy={busy}
           onExport={() => startJob("export")}

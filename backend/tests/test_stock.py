@@ -86,3 +86,38 @@ def test_stock_broadens_query_when_nothing_found(monkeypatch):
     monkeypatch.setattr(pixabay, "search", fake_search)
     assert stock.search("souk sack old hijab", "image", {"pixabay_api_key": "k"}) == [{"id": "x"}]
     assert seen == ["souk sack old hijab", "souk sack hijab", "souk hijab"]
+
+
+class FakeStream:
+    def __init__(self, status, body=b"", headers=None):
+        self.status_code, self._body, self.headers = status, body, headers or {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError("bad", request=None, response=None)
+
+    def iter_bytes(self, size):
+        yield self._body
+
+
+def test_download_waits_and_retries_on_429(tmp_path, monkeypatch):
+    responses = [FakeStream(429, headers={"Retry-After": "1"}), FakeStream(200, b"jpegdata")]
+    sleeps = []
+    monkeypatch.setattr(httpx, "stream", lambda *a, **k: responses.pop(0))
+    monkeypatch.setattr(stock.time, "sleep", sleeps.append)
+    name = stock.download({"source": "pixabay", "kind": "image", "id": "9", "url": "u"}, tmp_path)
+    assert (tmp_path / name).read_bytes() == b"jpegdata"
+    assert sleeps == [1.0]
+
+
+def test_download_gives_up_after_retries(tmp_path, monkeypatch):
+    monkeypatch.setattr(httpx, "stream", lambda *a, **k: FakeStream(429))
+    monkeypatch.setattr(stock.time, "sleep", lambda s: None)
+    with pytest.raises(stock.StockError, match="استنى دقيقة"):
+        stock.download({"source": "pixabay", "kind": "image", "id": "9", "url": "u"}, tmp_path)

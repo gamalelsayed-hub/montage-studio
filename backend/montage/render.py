@@ -4,7 +4,11 @@
 1. التسجيل الأساسي يتظبط على مقاس الفيديو (9:16 أو 16:9) بالقص من النص.
    لو التسجيل صوت بس، الخلفية لون كحلي.
 2. كل لقطة تتحط فوقه في ثانيتها (overlay) مع ظهور واختفاء ناعم، والصور بزووم بسيط.
-3. الأجزاء المقصوصة تتشال من الصورة والصوت في الآخر.
+   صور الصفحات (fit=contain) بتظهر كاملة فوق نسخة مضببة منها بدل ما تتقص.
+3. اللوجو في الركن، والترجمة (ملف ASS) فوق الكل.
+4. صوت التسجيل يتنضّف (تقليل الوش + ضغط + ظبط المستوى) لو clean_audio.
+5. الأجزاء المقصوصة تتشال من الصورة والصوت.
+مافيش موسيقى خلفية: صاحب المشروع مش عايزها (قرار متسجّل في CLAUDE.md).
 """
 
 from __future__ import annotations
@@ -32,7 +36,21 @@ def _cover(width: int, height: int) -> str:
             f"crop={width}:{height},setsar=1")
 
 
-def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str = "libx264") -> list[str]:
+# تقليل الوش ← ضغط بسيط ← مستوى صوت ثابت (معيار السوشيال -16 LUFS)
+CLEAN_AUDIO = ("highpass=f=80,afftdn=nr=12:nf=-35:tn=1,"
+               "acompressor=threshold=0.125:ratio=3:attack=15:release=250:makeup=1.5,"
+               "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000")
+
+
+def _filter_path(path: Path) -> str:
+    """مسار جوه فلتر ffmpeg: على ويندوز «C:» لازم تتكتب «C\\:»."""
+    return "'" + path.resolve().as_posix().replace("'", "\\'").replace(":", "\\:") + "'"
+
+
+def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str = "libx264",
+                  subtitles: Path | None = None, fonts_dir: Path | None = None,
+                  logo: dict | None = None) -> list[str]:
+    """subtitles: ملف ASS للترجمة. logo: {"file": Path, "position": "top-left"...}."""
     width, height = SIZES.get(timeline.get("aspect", "9:16"), SIZES["9:16"])
     duration = float(timeline["duration"])
     base = timeline["base"]
@@ -72,7 +90,15 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
         next_input += 1
 
         chain = f"[{n}:v]"
-        if not is_video and clip.get("motion") == "zoom_in":
+        if clip.get("fit") == "contain":
+            # الصورة كاملة في النص، ووراها نفس الصورة مكبّرة ومضببة
+            filters.append(f"[{n}:v]split=2[bg{index}][fg{index}]")
+            filters.append(f"[bg{index}]{_cover(width, height)},boxblur=24:2,eq=brightness=-0.08[bgb{index}]")
+            filters.append(f"[fg{index}]scale={int(width * 0.94)}:{int(height * 0.94)}:"
+                           f"force_original_aspect_ratio=decrease,setsar=1[fgs{index}]")
+            filters.append(f"[bgb{index}][fgs{index}]overlay=(W-w)/2:(H-h)/2,fps={FPS}[fit{index}]")
+            chain = f"[fit{index}]null"
+        elif not is_video and clip.get("motion") == "zoom_in":
             frames = max(int(length * FPS), 1)
             # نكبّر الصورة الأول عشان الزووم مايبقاش مكسّر
             chain += (f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
@@ -97,8 +123,28 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
             filters.append(f"[{n}:a]volume={_fmt(volume)},adelay={delay}|{delay}[ca{index}]")
             clip_audio.append(f"[ca{index}]")
 
+    if logo and Path(logo["file"]).exists():
+        args += ["-loop", "1", "-framerate", str(FPS), "-t", _fmt(duration), "-i", str(logo["file"])]
+        n = next_input
+        next_input += 1
+        logo_w = int(width * float(logo.get("size", 0.16)))
+        margin = int(width * 0.04)
+        x = f"{margin}" if "left" in logo.get("position", "top-right") else f"W-w-{margin}"
+        y = f"{margin}" if "top" in logo.get("position", "top-right") else f"H-h-{margin}"
+        opacity = float(logo.get("opacity", 0.9))
+        filters.append(f"[{n}:v]scale={logo_w}:-1,format=rgba,colorchannelmixer=aa={_fmt(opacity)}[logo]")
+        filters.append(f"[{current}][logo]overlay={x}:{y}:eof_action=pass[vlogo]")
+        current = "vlogo"
+
+    if subtitles and subtitles.exists():
+        fonts = f":fontsdir={_filter_path(fonts_dir)}" if fonts_dir and fonts_dir.exists() else ""
+        # shaping=complex عشان الحروف العربي تتوصل صح
+        filters.append(f"[{current}]ass={_filter_path(subtitles)}{fonts}:shaping=complex[vsub]")
+        current = "vsub"
+
     base_volume = float(base.get("volume", 1.0))
-    filters.append(f"[{audio_label}]volume={_fmt(base_volume)}[abase]")
+    clean = f",{CLEAN_AUDIO}" if base.get("clean_audio") else ""
+    filters.append(f"[{audio_label}]volume={_fmt(base_volume)}{clean}[abase]")
     audio = "abase"
     if clip_audio:
         filters.append(f"[abase]{''.join(clip_audio)}amix=inputs={len(clip_audio) + 1}:"
@@ -114,8 +160,10 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
         filters.append(f"[{current}]null[vout]")
         filters.append(f"[{audio}]anull[aout]")
 
+    kept = kept_duration(duration, timeline.get("cuts", []))
+
     args += ["-filter_complex", ";".join(filters), "-map", "[vout]", "-map", "[aout]",
-             "-t", _fmt(kept_duration(duration, timeline.get("cuts", [])))]
+             "-t", _fmt(kept)]
     if encoder == "h264_nvenc":
         args += ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "21", "-b:v", "0", "-pix_fmt", "yuv420p"]
     elif encoder == "h264_qsv":  # كارت Intel
@@ -128,13 +176,14 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
 
 
 def render(timeline: dict, project_dir: Path, output: Path,
-           on_progress: Callable[[float], None] | None = None) -> Path:
+           on_progress: Callable[[float], None] | None = None, **extras) -> Path:
+    """extras بتتبعت لـ build_command زي ما هي (subtitles و fonts_dir و logo)."""
     total = kept_duration(float(timeline["duration"]), timeline.get("cuts", [])) or 1.0
     # لو التشفير بالكارت فشل (تعريف قديم مثلًا) نرجع للمعالج
     encoders = hardware_encoders() + ["libx264"]
     last_error = ""
     for encoder in encoders:
-        args = build_command(timeline, project_dir, output, encoder)
+        args = build_command(timeline, project_dir, output, encoder, **extras)
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                    encoding="utf-8", errors="replace", creationflags=_NO_WINDOW)
         stderr_tail: list[str] = []
