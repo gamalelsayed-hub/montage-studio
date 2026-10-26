@@ -73,7 +73,18 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         <p className="hint">Pexels واقفين إصدار مفاتيح جديدة دلوقتي. لو الاتنين موجودين، البرنامج بيدوّر في Pixabay الأول.</p>
 
         <label>
-          مفتاح Claude (اختياري: بيكتب كلمات بحث أدق للقطات)
+          مفتاح Gemini (مجاني، اختياري: بيكتب كلمات بحث أدق للقطات)
+          <input dir="ltr" value={settings.gemini_api_key}
+            onChange={(e) => set("gemini_api_key", e.target.value)} placeholder="AIza..." />
+        </label>
+        <p className="hint">
+          افتح <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>
+          {" "}بحساب جوجل بتاعك ← Create API key ← انسخه. مجاني ومش محتاج فيزا. لو حطيت مفتاح Claude كمان، البرنامج
+          بيستخدم Claude الأول.
+        </p>
+
+        <label>
+          مفتاح Claude (اختياري وبفلوس: بديل لـ Gemini)
           <input dir="ltr" value={settings.anthropic_api_key}
             onChange={(e) => set("anthropic_api_key", e.target.value)} placeholder="sk-ant-..." />
         </label>

@@ -1,6 +1,6 @@
 """تحويل أوصاف اللقطات (عربي) لكلمات بحث إنجليزي لمواقع اللقطات (Pixabay / Pexels).
 
-لو فيه مفتاح Claude في الإعدادات: Claude بيكتب كلمات البحث (أدق بكتير).
+لو فيه مفتاح Claude أو Gemini (مجاني) في الإعدادات: الذكاء الاصطناعي بيكتب كلمات البحث (أدق بكتير).
 لو مافيش: قاموس صغير للكلمات الشايعة، والمستخدم يقدر يعدّل كلمة البحث من الواجهة.
 """
 
@@ -16,6 +16,9 @@ from .content_rules import PROMPT_RULE, apply_to_query
 log = logging.getLogger(__name__)
 
 CLAUDE_MODEL = "claude-opus-5-5"
+# موديلات Gemini المجانية (Free Tier)، بالترتيب: لو واحد اتشال أو مش متاح بنجرّب اللي بعده
+GEMINI_MODELS = ("gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest")
+GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # القاموس الاحتياطي: الكلمة بعد التطبيع ← إنجليزي
 _DICTIONARY = {
@@ -80,12 +83,9 @@ def _fallback_query(description: str) -> str:
     return " ".join(dict.fromkeys(words))  # "gold coins" + "gold" ← "gold coins"
 
 
-def _claude_queries(descriptions: list[str], api_key: str) -> list[str]:
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=api_key)
+def _prompt(descriptions: list[str]) -> str:
     numbered = "\n".join(f"{i + 1}. {d}" for i, d in enumerate(descriptions))
-    prompt = (
+    return (
         "These are Arabic (Egyptian) descriptions of b-roll shots for a video. For each one, "
         "write a short English stock-footage search query (2-5 words) that will find a good "
         "match on free stock sites (Pixabay, Pexels). Prefer concrete, visual nouns. If a description offers alternatives "
@@ -94,32 +94,61 @@ def _claude_queries(descriptions: list[str], api_key: str) -> list[str]:
         'Answer with JSON only: {"queries": ["...", "..."]} in the same order.\n\n'
         f"{numbered}"
     )
-    response = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=4000,
-        output_config={"effort": "low"},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if response.stop_reason == "refusal":
-        raise RuntimeError("Claude refused the request")
-    text = "".join(block.text for block in response.content if block.type == "text")
+
+
+def _parse(text: str, count: int) -> list[str]:
     match = re.search(r"\{.*\}", text, re.S)
     queries = json.loads(match.group(0) if match else text)["queries"]
-    if len(queries) != len(descriptions):
+    if len(queries) != count:
         raise ValueError("عدد كلمات البحث مش زي عدد اللقطات")
     return [str(q) for q in queries]
 
 
-def make_queries(descriptions: list[str], anthropic_api_key: str = "") -> tuple[list[str], str]:
-    """بيرجع (كلمات البحث، المصدر: "claude" أو "dictionary")."""
+def _claude_queries(descriptions: list[str], api_key: str) -> list[str]:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=4000,
+        output_config={"effort": "low"},
+        messages=[{"role": "user", "content": _prompt(descriptions)}],
+    )
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude refused the request")
+    text = "".join(block.text for block in response.content if block.type == "text")
+    return _parse(text, len(descriptions))
+
+
+def _gemini_queries(descriptions: list[str], api_key: str) -> list[str]:
+    import httpx
+
+    body = {"contents": [{"parts": [{"text": _prompt(descriptions)}]}],
+            "generationConfig": {"responseMimeType": "application/json"}}
+    for model in GEMINI_MODELS:
+        response = httpx.post(GEMINI_API.format(model=model), json=body, timeout=60,
+                              headers={"x-goog-api-key": api_key})
+        if response.status_code == 404:  # الموديل اتشال: نجرّب اللي بعده
+            continue
+        response.raise_for_status()
+        parts = (response.json().get("candidates") or [{}])[0].get("content", {}).get("parts") or []
+        return _parse("".join(part.get("text", "") for part in parts), len(descriptions))
+    raise RuntimeError("مفيش موديل Gemini متاح")
+
+
+def make_queries(descriptions: list[str], anthropic_api_key: str = "",
+                 gemini_api_key: str = "") -> tuple[list[str], str]:
+    """بيرجع (كلمات البحث، المصدر: "claude" أو "gemini" أو "dictionary")."""
     source = "dictionary"
     queries: list[str] | None = None
-    if anthropic_api_key and descriptions:
+    for name, key, ask in (("claude", anthropic_api_key, _claude_queries), ("gemini", gemini_api_key, _gemini_queries)):
+        if queries is not None or not key or not descriptions:
+            continue
         try:
-            queries = _claude_queries(descriptions, anthropic_api_key)
-            source = "claude"
-        except Exception as exc:  # الشبكة أو المفتاح: نكمل بالقاموس
-            log.warning("Claude keywords failed, using dictionary: %s", exc)
+            queries = ask(descriptions, key)
+            source = name
+        except Exception as exc:  # الشبكة أو المفتاح: نجرّب اللي بعده، وآخر حاجة القاموس
+            log.warning("%s keywords failed: %s", name, exc)
     if queries is None:
         queries = [_fallback_query(d) for d in descriptions]
     return [apply_to_query(q) for q in queries], source

@@ -115,7 +115,7 @@ def process(project_id: str, ctx: JobContext, retranscribe: bool = False) -> dic
 
     ctx.update(0.66, "بكتب كلمات البحث للقطات…")
     queries, source = keywords.make_queries([c["description"] for c in shot_clips],
-                                            config["anthropic_api_key"])
+                                            config["anthropic_api_key"], config["gemini_api_key"])
     for clip, query in zip(shot_clips, queries):
         clip["query"] = query
 
@@ -140,7 +140,7 @@ def process(project_id: str, ctx: JobContext, retranscribe: bool = False) -> dic
     else:
         warnings.append("مفيش مفتاح لقطات، فاللقطات فاضية. حط مفتاح Pixabay من الإعدادات واضغط «هات اللقطات».")
     if source == "dictionary" and timeline["clips"]:
-        warnings.append("كلمات البحث اتعملت بالقاموس البسيط. لو حطيت مفتاح Claude هتبقى أدق.")
+        warnings.append("كلمات البحث اتعملت بالقاموس البسيط. لو حطيت مفتاح Gemini (مجاني) أو Claude هتبقى أدق.")
 
     storage.write_json(path / "timeline.json", timeline)
     matched = sum(1 for t in timings if not t["estimated"])
@@ -170,7 +170,8 @@ def fetch_missing_media(project_id: str, ctx: JobContext) -> dict:
     empty = [c for c in timeline["clips"] if not c.get("media") and not c.get("page")]
     need_query = [c for c in empty if not c.get("query")]
     if need_query:
-        queries, _ = keywords.make_queries([c["description"] for c in need_query], config["anthropic_api_key"])
+        queries, _ = keywords.make_queries([c["description"] for c in need_query], config["anthropic_api_key"],
+                                           config["gemini_api_key"])
         for clip, query in zip(need_query, queries):
             clip["query"] = query
     warnings = []

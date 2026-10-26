@@ -47,10 +47,11 @@
 | --- | --- | --- | --- |
 | **Pixabay** | أيوه، عشان اللقطات | البرنامج يجيب صور وفيديوهات مجانية | اعمل حساب مجاني على [pixabay.com](https://pixabay.com/)، وبعدين افتح [pixabay.com/api/docs](https://pixabay.com/api/docs/) وانزل لحد **Parameters**، هتلاقي مفتاحك مكتوب جنب `key` باللون الأخضر |
 | **Pexels** | اختياري | مصدر لقطات تاني | Pexels واقفين إصدار مفاتيح جديدة دلوقتي. لو عندك مفتاح قديم حطه، والبرنامج هيدوّر في Pixabay الأول |
-| **Claude** | اختياري | يحوّل وصف اللقطة العربي لكلمات بحث إنجليزي دقيقة | [console.anthropic.com](https://console.anthropic.com/settings/keys) ← **Create Key** (بفلوس، بس استهلاك الفيديو الواحد قروش) |
+| **Gemini** | اختياري ومجاني (ننصح بيه) | يحوّل وصف اللقطة العربي لكلمات بحث إنجليزي دقيقة | افتح [aistudio.google.com/apikey](https://aistudio.google.com/apikey) بحساب جوجل ← **Create API key**. مجاني ومش محتاج فيزا |
+| **Claude** | اختياري | نفس شغل Gemini (لو الاتنين موجودين بيستخدم Claude). يحوّل وصف اللقطة العربي لكلمات بحث إنجليزي دقيقة | [console.anthropic.com](https://console.anthropic.com/settings/keys) ← **Create Key** (بفلوس، بس استهلاك الفيديو الواحد قروش) |
 | **OpenAI** | اختياري | يولّد صور بالذكاء الاصطناعي للقطات اللي مالهاش لقطة مناسبة | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) ← **Create new secret key**. اشحن رصيد من **Billing** (أقل حاجة 5 دولار). OpenAI ممكن يطلب توثيق الحساب (**Settings ← Organization ← Verify**) قبل أول صورة. الصورة بحوالي سنت لـ 6 سنت |
 
-من غير مفتاح Claude، البرنامج بيستخدم قاموس بسيط، وتقدر تكتب كلمة البحث بإيدك لأي لقطة.
+من غير مفتاح Gemini أو Claude، البرنامج بيستخدم قاموس بسيط، وتقدر تكتب كلمة البحث بإيدك لأي لقطة.
 المفاتيح بتتحفظ في ملف `settings.local.json` على جهازك بس، ومش بتترفع على GitHub.
 
 ## خطوات عمل فيديو

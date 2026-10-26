@@ -14,6 +14,7 @@ DEFAULTS: dict = {
     "pixabay_api_key": "",
     "pexels_api_key": "",
     "anthropic_api_key": "",
+    "gemini_api_key": "",  # مجاني من aistudio.google.com: بيكتب كلمات البحث لو مافيش مفتاح Claude
     "projects_dir": str(ROOT / "projects"),
     # large-v3 أدق موديل في العربي. على كارت شاشة قوي بيخلص دقيقة الصوت في ثواني.
     "whisper_model": "large-v3",
@@ -34,7 +35,7 @@ DEFAULTS: dict = {
     },
 }
 
-SECRET_KEYS = ("pixabay_api_key", "pexels_api_key", "anthropic_api_key", "openai_api_key")
+SECRET_KEYS = ("pixabay_api_key", "pexels_api_key", "anthropic_api_key", "gemini_api_key", "openai_api_key")
 BRAND_DIR = ROOT / "brand"  # اللوجو بيتحفظ هنا (ومش بيترفع على GitHub)
 _lock = threading.Lock()
 

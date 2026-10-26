@@ -141,11 +141,13 @@ export interface Settings {
   pixabay_api_key: string;
   pexels_api_key: string;
   anthropic_api_key: string;
+  gemini_api_key: string;
   openai_api_key: string;
   openai_image_model: string;
   has_pixabay_api_key: boolean;
   has_pexels_api_key: boolean;
   has_anthropic_api_key: boolean;
+  has_gemini_api_key: boolean;
   has_openai_api_key: boolean;
   brand: Brand;
   has_logo: boolean;
