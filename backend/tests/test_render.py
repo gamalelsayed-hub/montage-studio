@@ -74,3 +74,21 @@ def test_real_render(tmp_path, base_video):
     assert (info["width"], info["height"]) == (1080, 1920)
     assert abs(info["duration"] - 5.0) < 0.3
     assert progress
+
+
+@needs_ffmpeg
+def test_encoder_options(tmp_path):
+    for encoder, expected in (("h264_qsv", "nv12"), ("h264_nvenc", "yuv420p"), ("libx264", "yuv420p")):
+        args = build_command(_timeline(), tmp_path, tmp_path / "o.mp4", encoder)
+        assert args[args.index("-c:v") + 1] == encoder
+        assert args[args.index("-pix_fmt") + 1] == expected
+
+
+@needs_ffmpeg
+def test_falls_back_to_cpu_encoder(tmp_path, monkeypatch):
+    import montage.render as render_module
+
+    _make_inputs(tmp_path, False)
+    monkeypatch.setattr(render_module, "hardware_encoders", lambda: ["h264_qsv"])  # مافيش كارت في بيئة الاختبار
+    out = render(_timeline(), tmp_path, tmp_path / "out.mp4")
+    assert probe(out)["has_video"]
