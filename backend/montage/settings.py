@@ -32,6 +32,9 @@ def load() -> dict:
             data.update(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")))
         except json.JSONDecodeError:
             pass
+    if not Path(data["projects_dir"]).parent.exists():
+        # الفولدر اتنقل لمكان تاني: نرجع لفولدر projects جنب البرنامج
+        data["projects_dir"] = DEFAULTS["projects_dir"]
     return data
 
 
@@ -44,7 +47,9 @@ def save(changes: dict) -> dict:
             if key in SECRET_KEYS and isinstance(value, str) and value.startswith("••"):
                 continue  # القيمة المخفية رجعت من الواجهة زي ما هي
             data[key] = value
-        SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        # بنحفظ اللي اتغيّر عن الافتراضي بس، عشان لو الفولدر اتنقل مايفضلش شايل مسار قديم
+        stored = {k: v for k, v in data.items() if v != DEFAULTS.get(k)}
+        SETTINGS_FILE.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding="utf-8")
         return data
 
 
