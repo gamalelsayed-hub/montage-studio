@@ -20,7 +20,7 @@ CLAUDE_MODEL = "claude-opus-5-5"
 # القاموس الاحتياطي: الكلمة بعد التطبيع ← إنجليزي
 _DICTIONARY = {
     "ايد": "hand", "ايدين": "hands", "قلم": "pen", "عقد": "contract", "تقسيط": "installment",
-    "محل": "shop", "واجهه": "storefront", "سوق": "market", "قديم": "old", "شوال": "sack",
+    "محل": "shop", "واجهه": "storefront", "سوق": "souk", "قديم": "old", "شوال": "sack",
     "قمح": "wheat", "توب": "fabric", "قماش": "fabric", "دنانير": "gold coins",
     "دهب": "gold", "ذهب": "gold", "فضه": "silver", "دراهم": "silver coins", "كف": "palm",
     "خزنه": "vault", "بنك": "bank", "سبايك": "gold bars", "سبيكه": "gold bar",
@@ -38,19 +38,46 @@ _DICTIONARY = {
     "ناس": "people", "عيله": "family", "اطفال": "children", "طفل": "child",
     "شارع": "street", "القاهره": "cairo", "مصر": "egypt", "ساعه": "clock", "وقت": "time",
     "حساب": "calculator", "اله": "calculator", "كمبيوتر": "computer", "لابتوب": "laptop",
+    "رز": "rice", "تمر": "dates", "جمل": "camel", "تاجر": "merchant", "بياع": "seller",
+    "ميزان": "scale", "قرض": "loan", "دين": "debt", "ديون": "debt", "فايده": "interest rate",
+    "فوايد": "interest rate", "مرتب": "salary", "شيك": "check", "كريدت": "credit card",
+    "فيزا": "credit card", "كارت": "card", "قسط": "installment", "اقساط": "installments",
+    "سياره": "car", "دكان": "shop", "صراف": "atm", "مكتب": "office", "موظف": "employee",
+    "فلاح": "farmer", "زرع": "crops", "نخل": "palm trees", "صحرا": "desert", "مركب": "boat",
 }
+
+# الصفات بتيجي بعد الاسم في العربي، وبنحطها في الآخر عشان أول كلمة تبقى الحاجة الأساسية
+_ADJECTIVES = {"old", "new"}
+_ADJECTIVE_WORDS = {"قديم": "old", "قديمه": "old", "جديد": "new", "جديده": "new"}
+
+
+def _translate(text: str) -> list[str]:
+    words: list[str] = []
+    for token in normalize(text).split():
+        for candidate in (token, token[2:] if token.startswith("ال") else token,
+                          token[1:] if token[:1] in "وبف" else token):
+            english = _DICTIONARY.get(candidate) or _ADJECTIVE_WORDS.get(candidate)
+            if english:
+                if english not in words:
+                    words.append(english)
+                break
+    return words
 
 
 def _fallback_query(description: str) -> str:
-    words: list[str] = []
-    for token in normalize(description).split():
-        for candidate in (token, token[2:] if token.startswith("ال") else token,
-                          token[1:] if token[:1] in "وبف" else token):
-            english = _DICTIONARY.get(candidate)
-            if english and english not in words:
-                words.append(english)
-                break
-    return " ".join(words[:4])
+    """الوصف غالبًا «المكان: التفاصيل». المكان هو الأهم، وبعده حاجة واحدة من التفاصيل.
+
+    الكلمات الأقل بتجيب نتايج أدق، والبحث بيقلّل الكلمات لوحده لو مالقاش (stock.broader_queries).
+    """
+    head, sep, tail = description.partition(":")
+    if not sep:
+        head, tail = re.split(r"[،,]", description, maxsplit=1)[0], description
+    main = _translate(head)
+    details = [w for w in _translate(tail) if w not in main and w not in _ADJECTIVES]
+    nouns = [w for w in main if w not in _ADJECTIVES] + details
+    adjectives = [w for w in main if w in _ADJECTIVES]
+    words = " ".join(nouns[:2] + adjectives[:1]).split()
+    return " ".join(dict.fromkeys(words))  # "gold coins" + "gold" ← "gold coins"
 
 
 def _claude_queries(descriptions: list[str], api_key: str) -> list[str]:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from .content_rules import is_allowed
 from .stock import StockError
 
 API = "https://api.pexels.com"
@@ -31,8 +32,9 @@ def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: 
         raise StockError(f"Pexels رجّع خطأ {response.status_code}")
     data = response.json()
     if kind == "video":
-        return [_video_candidate(v, aspect) for v in data.get("videos", []) if v.get("video_files")]
-    return [_photo_candidate(p) for p in data.get("photos", [])]
+        return [_video_candidate(v, aspect) for v in data.get("videos", [])
+                if v.get("video_files") and is_allowed(v.get("url"))]
+    return [_photo_candidate(p) for p in data.get("photos", []) if is_allowed(p.get("alt"))]
 
 
 def _photo_candidate(photo: dict) -> dict:

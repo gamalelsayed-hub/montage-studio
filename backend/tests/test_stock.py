@@ -67,3 +67,22 @@ def test_stock_without_keys():
     assert not stock.has_key({"pixabay_api_key": "", "pexels_api_key": ""})
     with pytest.raises(stock.StockError, match="Pixabay"):
         stock.search("q", "image", {})
+
+
+def test_pixabay_drops_banned_tags(monkeypatch):
+    hits = {"hits": [dict(PHOTO_HITS["hits"][0], id=1, tags="christmas, market, houses"),
+                     dict(PHOTO_HITS["hits"][0], id=2, tags="souk, market, spices")]}
+    monkeypatch.setattr(httpx, "get", lambda url, params, timeout: FakeResponse(hits))
+    assert [r["id"] for r in pixabay.search("market old", "image", "k")] == ["2"]
+
+
+def test_stock_broadens_query_when_nothing_found(monkeypatch):
+    seen = []
+
+    def fake_search(query, *a):
+        seen.append(query)
+        return [{"id": "x"}] if query == "souk hijab" else []
+
+    monkeypatch.setattr(pixabay, "search", fake_search)
+    assert stock.search("souk sack old hijab", "image", {"pixabay_api_key": "k"}) == [{"id": "x"}]
+    assert seen == ["souk sack old hijab", "souk sack hijab", "souk hijab"]
