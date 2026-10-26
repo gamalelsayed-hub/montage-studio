@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from . import aligner, captions, edits, keywords, media, settings, stock, storage, transcribe
+from . import aligner, captions, edits, imagegen, keywords, media, settings, stock, storage, transcribe
 from .jobs import JobContext
 from .render import render
 from .script_parser import parse_script
@@ -106,6 +106,10 @@ def process(project_id: str, ctx: JobContext, retranscribe: bool = False) -> dic
                               pages=storage.list_pages(path),
                               captions=captions.build_captions(words),
                               cuts=edits.auto_cuts(words, recording["duration"]))
+    brand = config.get("brand") or {}
+    # الترجمة بخط وألوان الهوية
+    timeline["caption_style"].update(font=brand.get("font") or timeline["caption_style"]["font"],
+                                     box_color=brand.get("primary_color") or timeline["caption_style"]["box_color"])
     shot_clips = [c for c in timeline["clips"] if not c.get("page")]
     skipped = len(script["shots"]) - len(shot_clips)
 
@@ -181,6 +185,35 @@ def fetch_missing_media(project_id: str, ctx: JobContext) -> dict:
     return {"filled": sum(1 for c in empty if c.get("media")), "warnings": warnings}
 
 
+def generate_missing(project_id: str, ctx: JobContext) -> dict:
+    """«ولّد بالذكاء الاصطناعي» لكل لقطة لسه فاضية."""
+    path = storage.project_dir(project_id)
+    meta = storage.read_json(path / "project.json")
+    config = settings.load()
+    timeline = storage.read_json(path / "timeline.json")
+    if not timeline:
+        raise RuntimeError("اعمل التجهيز الأوتوماتيك الأول.")
+    empty = [c for c in timeline["clips"] if not c.get("media") and not c.get("page")]
+    warnings: list[str] = []
+    for index, clip in enumerate(empty):
+        ctx.update(index / max(len(empty), 1), f"بولّد الصور ({index + 1}/{len(empty)})…")
+        try:
+            set_generated_media(clip, imagegen.generate(clip["description"], meta["aspect"], config, path / "media"))
+        except imagegen.ImageGenError as exc:
+            warnings.append(f"{clip['description'][:40]}: {exc}")
+            if "مفتاح" in str(exc) or "رصيد" in str(exc):
+                break  # مش هينفع في الباقي كمان
+        storage.write_json(path / "timeline.json", timeline)  # نحفظ أول بأول عشان الصور غالية
+    return {"filled": sum(1 for c in empty if c.get("media")), "warnings": warnings}
+
+
+def set_generated_media(clip: dict, media_info: dict) -> None:
+    if clip.get("kind") != "image" or not clip.get("motion"):
+        clip["motion"] = "zoom_in"  # كانت لقطة فيديو: الصورة تاخد زووم بطيء
+    clip["media"] = media_info
+    clip["kind"] = "image"
+
+
 def export(project_id: str, ctx: JobContext) -> dict:
     path = storage.project_dir(project_id)
     timeline = storage.read_json(path / "timeline.json")
@@ -213,7 +246,8 @@ def render_extras(timeline: dict, path: Path, meta: dict) -> dict:
             if cut_start <= start + 0.05:
                 start = cut_end
         title = {"text": meta["name"], "start": start + 0.2, "end": start + 3.2, "font": brand.get("font"),
-                 "color": brand.get("text_color") or "#FFFFFF", "box_color": brand.get("primary_color")}
+                 "color": brand.get("text_color") or "#FFFFFF",
+                 "box_color": brand.get("accent_color") or brand.get("primary_color")}
     extras: dict = {"fonts_dir": captions.FONTS_DIR}
     if (style.get("enabled") and timeline["captions"]) or title:
         extras["subtitles"] = captions.write_ass(path / "captions.ass", timeline["captions"], style,

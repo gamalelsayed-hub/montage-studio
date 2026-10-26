@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
-import { api } from "../api";
-import type { Settings } from "../types";
+import { useEffect, useRef, useState } from "react";
+import { api, upload } from "../api";
+import type { Brand, Settings } from "../types";
 
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [logoVersion, setLogoVersion] = useState(Date.now());
+  const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.get<Settings>("/api/settings").then(setSettings).catch((e) => setMessage(e.message));
@@ -13,12 +15,29 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   if (!settings) return null;
   const set = (key: keyof Settings, value: string) => setSettings({ ...settings, [key]: value });
+  const setBrand = (changes: Partial<Brand>) => setSettings({ ...settings, brand: { ...settings.brand, ...changes } });
+
+  const uploadLogo = async (file: File) => {
+    try {
+      await upload("/api/brand/logo", file);
+      setSettings({ ...settings, has_logo: true });
+      setLogoVersion(Date.now());
+    } catch (e: any) {
+      setMessage(e.message);
+    }
+  };
+
+  const deleteLogo = async () => {
+    await api.del("/api/brand/logo");
+    setSettings({ ...settings, has_logo: false });
+  };
 
   const save = async () => {
     setSaving(true);
     try {
       const saved = await api.put<Settings>("/api/settings", settings);
-      setSettings({ ...saved, ffmpeg_ok: settings.ffmpeg_ok });
+      setSettings({ ...saved, ffmpeg_ok: settings.ffmpeg_ok, has_logo: settings.has_logo, fonts: settings.fonts });
+      window.dispatchEvent(new Event("settings-changed"));
       setMessage("اتحفظ ✓");
     } catch (e: any) {
       setMessage(e.message);
@@ -63,6 +82,84 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
           ← API Keys ← Create Key. من غيره البرنامج بيستخدم قاموس بسيط وانت تعدّل كلمة البحث بإيدك.
         </p>
 
+        <label>
+          مفتاح OpenAI (اختياري: لتوليد صور بالذكاء الاصطناعي)
+          <input dir="ltr" value={settings.openai_api_key}
+            onChange={(e) => set("openai_api_key", e.target.value)} placeholder="sk-..." />
+        </label>
+        <p className="hint">
+          من <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">platform.openai.com/api-keys</a>
+          {" "}← Create new secret key. لازم تشحن رصيد من Billing (أقل حاجة 5 دولار)، وOpenAI ممكن يطلب توثيق الحساب
+          (Settings ← Organization ← Verify) قبل أول صورة. الصورة الواحدة بحوالي سنت لـ 6 سنت حسب الموديل.
+        </p>
+        <label>
+          موديل الصور
+          <select value={settings.openai_image_model} onChange={(e) => set("openai_image_model", e.target.value)}>
+            <option value="gpt-image-1-mini">gpt-image-1-mini (أرخص)</option>
+            <option value="gpt-image-1">gpt-image-1 (أجود)</option>
+          </select>
+        </label>
+
+        <h3 className="section-title">🎨 قالب الهوية (لكل الفيديوهات)</h3>
+        <div className="row">
+          <label className="inline">اللون الأساسي
+            <input type="color" value={settings.brand.primary_color} onChange={(e) => setBrand({ primary_color: e.target.value })} />
+          </label>
+          <label className="inline">لون الكلام
+            <input type="color" value={settings.brand.text_color} onChange={(e) => setBrand({ text_color: e.target.value })} />
+          </label>
+          <label className="inline">لون العنوان
+            <input type="color" value={settings.brand.accent_color} onChange={(e) => setBrand({ accent_color: e.target.value })} />
+          </label>
+        </div>
+        <label>
+          الخط
+          <select value={settings.brand.font} onChange={(e) => setBrand({ font: e.target.value })}>
+            {(settings.fonts ?? ["Tajawal", "Cairo"]).map((f) => (
+              <option key={f} value={f}>{f === "Tajawal" ? "تجوال (Tajawal)" : f === "Cairo" ? "القاهرة (Cairo)" : f}</option>
+            ))}
+          </select>
+        </label>
+        <div className="brand-preview" style={{ fontFamily: settings.brand.font }}>
+          <span style={{ background: settings.brand.primary_color, color: settings.brand.text_color }}>الترجمة</span>
+          <span style={{ background: settings.brand.accent_color, color: settings.brand.text_color }}>عنوان الفيديو</span>
+        </div>
+        <div className="row logo-row">
+          {settings.has_logo ? (
+            <img className="logo-preview" src={`/api/brand/logo?v=${logoVersion}`} alt="اللوجو" />
+          ) : (
+            <span className="muted">مافيش لوجو.</span>
+          )}
+          <button className="ghost" onClick={() => logoInput.current?.click()}>📁 {settings.has_logo ? "غيّر اللوجو" : "ارفع لوجو"}</button>
+          {settings.has_logo && <button className="danger ghost" onClick={deleteLogo}>شيله</button>}
+          <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden
+            onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
+        </div>
+        <p className="hint">يفضّل PNG بخلفية شفافة. اللوجو بيظهر في ركن الفيديو طول الوقت.</p>
+        <div className="row">
+          <label>
+            مكان اللوجو
+            <select value={settings.brand.logo_position}
+              onChange={(e) => setBrand({ logo_position: e.target.value as Brand["logo_position"] })}>
+              <option value="top-right">فوق يمين</option>
+              <option value="top-left">فوق شمال</option>
+              <option value="bottom-right">تحت يمين</option>
+              <option value="bottom-left">تحت شمال</option>
+            </select>
+          </label>
+          <label>
+            حجمه
+            <input type="range" min={0.08} max={0.3} step={0.01} value={settings.brand.logo_size}
+              onChange={(e) => setBrand({ logo_size: Number(e.target.value) })} />
+          </label>
+          <label>
+            وضوحه
+            <input type="range" min={0.3} max={1} step={0.05} value={settings.brand.logo_opacity}
+              onChange={(e) => setBrand({ logo_opacity: Number(e.target.value) })} />
+          </label>
+        </div>
+
+        <h3 className="section-title">التفريغ</h3>
         <div className="row">
           <label>
             موديل التفريغ

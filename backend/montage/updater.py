@@ -36,7 +36,7 @@ def _hash_files(files: list[Path]) -> str:
 
 
 def frontend_hash() -> str:
-    files = [p for p in (FRONTEND / "src").rglob("*") if p.is_file()]
+    files = [p for folder in ("src", "public") for p in (FRONTEND / folder).rglob("*") if p.is_file()]
     files += [FRONTEND / name for name in ("index.html", "package.json", "vite.config.ts", "tsconfig.json")
               if (FRONTEND / name).exists()]
     return _hash_files(files)

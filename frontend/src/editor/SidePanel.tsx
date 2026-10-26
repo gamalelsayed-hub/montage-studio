@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { api, fileUrl, formatTime } from "../api";
-import type { Caption, CaptionStyle, Cut, Timeline } from "../types";
+import type { Brand, Caption, CaptionStyle, Cut, Timeline } from "../types";
 import { keptDuration, removeAutoCuts, replaceAutoCuts } from "./timelineOps";
 
-type Tab = "audio" | "captions" | "pages" | "help";
+type Tab = "audio" | "captions" | "pages" | "brand" | "help";
 
 interface Props {
   projectId: string;
@@ -14,6 +14,10 @@ interface Props {
   onChange: (update: (t: Timeline) => Timeline) => void; // تعديل بنقطة رجوع للـ Undo
   onPagesChange: (pages: Record<string, string>) => void;
   onFetchMedia: () => void;
+  onGenerateMissing: () => void;
+  brand: Brand | null;
+  hasLogo: boolean;
+  hasOpenAI: boolean;
 }
 
 const FONTS = [
@@ -94,6 +98,7 @@ export default function SidePanel(props: Props) {
           ["audio", "🔊 الصوت والقص"],
           ["captions", "💬 الترجمة"],
           ["pages", "📄 الصفحات"],
+          ["brand", "🎨 الهوية"],
           ["help", "❓ مساعدة"],
         ] as [Tab, string][]).map(([key, label]) => (
           <button key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>{label}</button>
@@ -205,6 +210,35 @@ export default function SidePanel(props: Props) {
         </div>
       )}
 
+      {tab === "brand" && (
+        <div className="panel-section">
+          <label className="check">
+            <input type="checkbox" checked={timeline.brand.logo}
+              onChange={(e) => onChange((t) => ({ ...t, brand: { ...t.brand, logo: e.target.checked } }))} />
+            اعرض اللوجو في ركن الفيديو
+          </label>
+          {!props.hasLogo && <p className="hint small">لسه مارفعتش لوجو. ارفعه من ⚙️ الإعدادات ← قالب الهوية.</p>}
+          <label className="check">
+            <input type="checkbox" checked={timeline.brand.title}
+              onChange={(e) => onChange((t) => ({ ...t, brand: { ...t.brand, title: e.target.checked } }))} />
+            اكتب اسم الفيديو في أول 3 ثواني
+          </label>
+          {props.brand && (
+            <>
+              <div className="brand-preview" style={{ fontFamily: props.brand.font }}>
+                <span style={{ background: props.brand.primary_color, color: props.brand.text_color }}>الخط والألوان</span>
+              </div>
+              <button onClick={() => onChange((t) => ({
+                ...t, caption_style: { ...t.caption_style, font: props.brand!.font, box_color: props.brand!.primary_color, color: props.brand!.text_color, box: true },
+              }))}>
+                طبّق خط وألوان الهوية على الترجمة
+              </button>
+            </>
+          )}
+          <p className="hint small">الألوان والخط واللوجو بيتظبطوا مرة واحدة من ⚙️ الإعدادات ← قالب الهوية، وبيتطبقوا على كل الفيديوهات.</p>
+        </div>
+      )}
+
       {tab === "help" && (
         <div className="help">
           <ul>
@@ -221,6 +255,14 @@ export default function SidePanel(props: Props) {
         <p className="warn">
           فيه {props.emptyClips} لقطة فاضية.{" "}
           <button className="link" onClick={props.onFetchMedia} disabled={props.busy}>هات اللقطات</button>
+          {props.hasOpenAI && (
+            <>
+              {" · "}
+              <button className="link" onClick={() => {
+                if (confirm(`هيولّد ${props.emptyClips} صورة بالذكاء الاصطناعي (كل صورة بحوالي سنت لـ 6 سنت). أكمّل؟`)) props.onGenerateMissing();
+              }} disabled={props.busy}>🎨 ولّدهم بالذكاء الاصطناعي</button>
+            </>
+          )}
         </p>
       )}
       {busy && <p className="muted">{busy}</p>}

@@ -21,11 +21,11 @@ DEFAULTS: dict = {
     "default_aspect": "9:16",
     # توليد الصور بالذكاء الاصطناعي (النسخة التالتة)
     "openai_api_key": "",
-    "openai_image_model": "gpt-image-1",
+    "openai_image_model": "gpt-image-1-mini",  # لو مش متاح على الحساب بيرجع لـ gpt-image-1
     # قالب الهوية: بيتطبق على الترجمة والعنوان واللوجو في كل الفيديوهات
     "brand": {
         "primary_color": "#13202E",
-        "accent_color": "#1E6B47",
+        "accent_color": "#1E6B47",     # خلفية اسم الفيديو في أوله
         "text_color": "#FFFFFF",
         "font": "Tajawal",
         "logo_position": "top-right",  # top-right | top-left | bottom-right | bottom-left

@@ -222,3 +222,11 @@ main { padding: 16px 20px 40px; max-width: 1500px; margin: 0 auto; }
 .pages-grid button { position: absolute; bottom: 2px; inset-inline-end: 2px; padding: 0 5px; font-size: 11px; }
 .estimate-note { background: #fff4e5; border: 1px solid #f1d5b3; color: #8a4b0f; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
 input[type="color"] { width: 44px; height: 30px; padding: 2px; }
+
+/* النسخة التالتة */
+.section-title { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.brand-preview { display: flex; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 18px; margin: 4px 0; }
+.brand-preview span { padding: 4px 12px; border-radius: 6px; }
+.logo-preview { height: 48px; max-width: 160px; object-fit: contain; background: repeating-conic-gradient(#e5e9ee 0% 25%, #fff 0% 50%) 50% / 12px 12px; border-radius: 6px; padding: 4px; }
+.ai-box { background: #f4f1fb; border: 1px solid #ddd3f3; border-radius: 10px; padding: 10px; margin-top: 10px; }
+.ai-box h4 { margin-top: 0; }

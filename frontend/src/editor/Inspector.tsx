@@ -63,6 +63,19 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
     }
   };
 
+  const generate = async () => {
+    setBusy("بيولّد الصورة (من 10 لـ 40 ثانية)…");
+    setError("");
+    try {
+      const data = await api.post<{ media: ClipMedia; kind: "image" }>(`${base}/generate-image`, { description: clip.description });
+      onChange({ media: data.media, kind: "image", motion: clip.motion && clip.motion !== "none" ? clip.motion : "zoom_in" });
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const setTime = (edge: "start" | "end", value: string) => {
     const seconds = Number(value);
     if (Number.isFinite(seconds)) onChange({ [edge]: Math.max(0, seconds) } as Partial<Clip>);
@@ -118,7 +131,9 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
       )}
       {clip.media && (
         <p className="muted small">
-          الحالية: {clip.media.source === "upload" ? "من جهازك" : `${clip.media.source === "pixabay" ? "Pixabay" : "Pexels"}${clip.media.author ? ` · ${clip.media.author}` : ""}`}
+          الحالية: {clip.media.source === "upload" ? "من جهازك" : clip.media.source === "ai" ? "🎨 متولّدة بالذكاء الاصطناعي"
+            : clip.media.source === "page" ? "صفحة من اللوحة"
+              : `${clip.media.source === "pixabay" ? "Pixabay" : "Pexels"}${clip.media.author ? ` · ${clip.media.author}` : ""}`}
           {clip.media.page && <> · <a href={clip.media.page} target="_blank" rel="noreferrer">المصدر</a></>}
         </p>
       )}
@@ -138,6 +153,14 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
         <input ref={fileInput} type="file" accept="image/*,video/*" hidden
           onChange={(e) => e.target.files?.[0] && uploadOwn(e.target.files[0])} />
         {busy && <span className="muted">{busy}</span>}
+      </div>
+      <div className="ai-box">
+        <h4>🎨 ولّد صورة بالذكاء الاصطناعي</h4>
+        <p className="muted small">
+          بيرسم صورة من وصف اللقطة اللي فوق (عدّله لو حابب). مفيد لما Pixabay مايلاقيش حاجة مناسبة. محتاج مفتاح OpenAI
+          في الإعدادات، والصورة بحوالي سنت لـ 6 سنت.
+        </p>
+        <button onClick={generate} disabled={!!busy || !clip.description.trim()}>🎨 ولّد صورة</button>
       </div>
       <p className="hint small">راجع إن أي ست في اللقطة محجبة ولابسة لبس شرعي.</p>
       {error && <p className="error">{error}</p>}

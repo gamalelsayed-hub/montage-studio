@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, fileUrl, formatTime } from "../api";
-import type { Aspect, Caption, Clip, Script, Timeline } from "../types";
+import type { Aspect, Brand, Caption, Clip, Script, Timeline } from "../types";
 import Inspector from "./Inspector";
 import Preview, { type PreviewBrand } from "./Preview";
 import SidePanel from "./SidePanel";
@@ -18,6 +18,10 @@ interface Props {
   pages: Record<string, string>;
   onPagesChange: (pages: Record<string, string>) => void;
   brand?: PreviewBrand;
+  brandSettings: Brand | null;
+  hasLogo: boolean;
+  hasOpenAI: boolean;
+  onGenerateMissing: () => void;
   exports: string[];
   busy: boolean;
   lastExport: string | null;
@@ -26,7 +30,8 @@ interface Props {
 }
 
 export default function Editor({
-  projectId, initial, script, pages, onPagesChange, brand, exports, busy, lastExport, onExport, onFetchMedia,
+  projectId, initial, script, pages, onPagesChange, brand, brandSettings, hasLogo, hasOpenAI, onGenerateMissing,
+  exports, busy, lastExport, onExport, onFetchMedia,
 }: Props) {
   const history = useHistory<Timeline>(initial);
   const timeline = history.present;
@@ -268,7 +273,9 @@ export default function Editor({
             </div>
           ) : (
             <SidePanel projectId={projectId} timeline={timeline} pages={pages} emptyClips={emptyClips} busy={busy}
-              onChange={(update) => history.set(update)} onPagesChange={onPagesChange} onFetchMedia={fetchNow} />
+              onChange={(update) => history.set(update)} onPagesChange={onPagesChange} onFetchMedia={fetchNow}
+              onGenerateMissing={async () => { await saveNow(); onGenerateMissing(); }}
+              brand={brandSettings} hasLogo={hasLogo} hasOpenAI={hasOpenAI} />
           )}
         </div>
       </div>

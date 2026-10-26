@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fileUrl, formatTime, upload, waitForJob } from "../api";
 import Editor from "../editor/Editor";
-import type { Job, ProjectData, Script } from "../types";
+import type { Job, ProjectData, Script, Settings } from "../types";
 
 export default function ProjectPage({ projectId }: { projectId: string }) {
   const [data, setData] = useState<ProjectData | null>(null);
@@ -18,6 +18,18 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
   const pagesInput = useRef<HTMLInputElement>(null);
 
   const base = `/api/projects/${encodeURIComponent(projectId)}`;
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [logoVersion, setLogoVersion] = useState(Date.now());
+
+  useEffect(() => {
+    const load = () => {
+      api.get<Settings>("/api/settings").then(setSettings).catch(() => undefined);
+      setLogoVersion(Date.now());
+    };
+    load();
+    window.addEventListener("settings-changed", load);
+    return () => window.removeEventListener("settings-changed", load);
+  }, []);
 
   const reload = useCallback(async () => {
     try {
@@ -251,6 +263,21 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
           busy={busy}
           onExport={() => startJob("export")}
           onFetchMedia={() => startJob("fetch-media")}
+          onGenerateMissing={() => startJob("generate-missing")}
+          brandSettings={settings?.brand ?? null}
+          hasLogo={!!settings?.has_logo}
+          hasOpenAI={!!settings?.has_openai_api_key}
+          brand={settings ? {
+            logoUrl: settings.has_logo ? `/api/brand/logo?v=${logoVersion}` : null,
+            logoPosition: settings.brand.logo_position,
+            logoSize: settings.brand.logo_size,
+            logoOpacity: settings.brand.logo_opacity,
+            title: data.meta.name,
+            primary: settings.brand.primary_color,
+            accent: settings.brand.accent_color,
+            text: settings.brand.text_color,
+            font: settings.brand.font,
+          } : undefined}
           lastExport={lastResult?.kind === "export" ? lastResult.result.file : null}
         />
       )}
