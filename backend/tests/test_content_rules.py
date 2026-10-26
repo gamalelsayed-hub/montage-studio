@@ -21,3 +21,17 @@ def test_dictionary_fallback_without_key():
     assert source == "dictionary"
     assert "gold" in queries[0]
     assert queries[1].endswith("hijab")
+
+
+def test_dictionary_fallback_keeps_the_scene_first_and_short():
+    queries, _ = make_queries(["سوق قديم: واحد شايل شوال قمح، والتاني ماسك توب قماش"])
+    assert queries[0] == "souk sack old"
+
+
+def test_banned_results():
+    from montage.content_rules import is_allowed
+
+    assert not is_allowed("christmas, tree, house")
+    assert not is_allowed("Wine glasses on a table")
+    assert is_allowed("market, souk, spices")
+    assert is_allowed(None)

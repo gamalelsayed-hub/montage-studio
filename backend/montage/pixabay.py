@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from .content_rules import is_allowed
 from .stock import StockError
 
 API = "https://pixabay.com/api/"
@@ -16,7 +17,8 @@ def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: 
     query = " ".join(query.split())[:100]  # Pixabay مابيقبلش أكتر من 100 حرف
     if not query:
         return []
-    params = {"key": api_key, "q": query, "per_page": max(3, min(per_page, 200)), "safesearch": "true"}
+    # بنطلب ضعف العدد عشان يفضل كفاية بعد ما نشيل الممنوعات
+    params = {"key": api_key, "q": query, "per_page": max(3, min(per_page * 2, 200)), "safesearch": "true"}
     if kind == "video":
         url = API + "videos/"
     else:
@@ -32,14 +34,14 @@ def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: 
         raise StockError("Pixabay بيقول طلبات كتير. استنى دقيقة وجرّب تاني.")
     if response.status_code >= 400:
         raise StockError(f"Pixabay رجّع خطأ {response.status_code}")
-    hits = response.json().get("hits", [])
+    hits = [h for h in response.json().get("hits", []) if is_allowed(h.get("tags"))]
     if kind == "video":
         candidates = [c for c in (_video_candidate(h) for h in hits) if c]
         portrait = aspect == "9:16"
         # اللقطات اللي على نفس اتجاه الفيديو الأول
         candidates.sort(key=lambda c: ((c["height"] or 0) > (c["width"] or 0)) != portrait)
-        return candidates
-    return [_photo_candidate(h) for h in hits if h.get("largeImageURL")]
+        return candidates[:per_page]
+    return [_photo_candidate(h) for h in hits if h.get("largeImageURL")][:per_page]
 
 
 def _photo_candidate(hit: dict) -> dict:

@@ -24,8 +24,23 @@ def has_key(config: dict) -> bool:
     return bool(providers(config))
 
 
+_RULE_WORDS = {"hijab", "muslim"}
+
+
+def broader_queries(query: str) -> list[str]:
+    """كلمات بحث كتير = نتايج قليلة أو غريبة، فلو مالقيناش نجرّب بكلمات أقل (ونسيب كلمات قواعد المحتوى)."""
+    words = query.split()
+    rule = [w for w in words if w.lower() in _RULE_WORDS]
+    core = [w for w in words if w.lower() not in _RULE_WORDS]
+    out = [" ".join(words)] if words else []
+    for n in (2, 1):
+        if len(core) > n:
+            out.append(" ".join(core[:n] + rule))
+    return out
+
+
 def search(query: str, kind: str, config: dict, aspect: str = "9:16", per_page: int = 8) -> list[dict]:
-    """يدوّر في أول مصدر ليه مفتاح، ولو مالقاش نتايج يجرّب اللي بعده."""
+    """يدوّر في أول مصدر ليه مفتاح، ولو مالقاش نتايج يجرّب اللي بعده، وبعدين بكلمات أقل."""
     from . import pexels, pixabay
 
     available = providers(config)
@@ -33,16 +48,19 @@ def search(query: str, kind: str, config: dict, aspect: str = "9:16", per_page: 
         raise StockError(NO_KEY_MESSAGE)
     modules = {"pixabay": pixabay, "pexels": pexels}
     errors: list[str] = []
-    for name, key in available:
-        try:
-            results = modules[name].search(query, kind, key, aspect, per_page)
-        except StockError as exc:
-            errors.append(str(exc))
-            continue
-        if results:
-            return results
-    if errors and len(errors) == len(available):
-        raise StockError(" / ".join(errors))
+    attempts = 0
+    for variant in broader_queries(query):
+        for name, key in available:
+            attempts += 1
+            try:
+                results = modules[name].search(variant, kind, key, aspect, per_page)
+            except StockError as exc:
+                errors.append(str(exc))
+                continue
+            if results:
+                return results
+    if errors and len(errors) == attempts:
+        raise StockError(" / ".join(dict.fromkeys(errors)))
     return []
 
 
