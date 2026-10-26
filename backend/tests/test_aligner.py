@@ -62,3 +62,17 @@ def test_retake_uses_one_take_and_keeps_order():
     words = [{"word": w, "start": float(i), "end": i + 0.5} for i, w in enumerate(spoken)]
     timings = align(paragraphs, words)
     assert timings[0].start < timings[1].start
+
+
+def test_short_recording_leaves_unspoken_paragraphs_after_the_end(example_script):
+    paragraphs, _ = _paragraphs(example_script)
+    spoken = paragraphs[:8]
+    words = fake_transcript(spoken)
+    duration = words[-1]["end"] + 1
+    timings = align(paragraphs, words, duration)
+    assert all(not t.estimated for t in timings[:8])
+    # الفقرات اللي ماتقالتش ماتتكبسش في آخر ثانية: معظمها وقته بعد نهاية التسجيل
+    after_end = [t for t in timings[8:] if t.start >= duration]
+    assert len(after_end) >= len(timings[8:]) - 2
+    starts = [t.start for t in timings]
+    assert starts == sorted(starts)

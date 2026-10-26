@@ -3,7 +3,7 @@ import { fileUrl, formatTime } from "../api";
 import type { Clip, Timeline } from "../types";
 import { moveClip, resizeClip } from "./timelineOps";
 
-export type Selection = { type: "clip" | "cut"; id: string } | null;
+export type Selection = { type: "clip" | "cut" | "caption"; id: string } | null;
 
 interface Props {
   projectId: string;
@@ -85,6 +85,7 @@ export default function TimelineView(props: Props) {
         <div className="ruler-label" />
         <div className="label">لقطات</div>
         <div className="label">التسجيل</div>
+        <div className="label captions-label">ترجمة</div>
       </div>
       <div ref={scroller} className="timeline-scroll" onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
         <div className="timeline-inner" style={{ width }}>
@@ -104,12 +105,13 @@ export default function TimelineView(props: Props) {
                 : null;
               return (
                 <div key={clip.id}
-                  className={`clip ${clip.kind} ${selected ? "selected" : ""} ${clip.media ? "" : "empty"}`}
+                  className={`clip ${clip.kind} ${selected ? "selected" : ""} ${clip.media ? "" : "empty"} ${clip.estimated ? "estimated" : ""} ${clip.page ? "page" : ""}`}
                   style={{ left: clip.start * pps, width: Math.max((clip.end - clip.start) * pps, 6) }}
-                  title={`${clip.description}\n${formatTime(clip.start, true)} → ${formatTime(clip.end, true)}`}
+                  title={`${clip.estimated ? "⚠️ وقتها متقدّر (الكلام بتاعها ماتلقاش في التسجيل)، راجع مكانها\n" : ""}${clip.description}\n${formatTime(clip.start, true)} → ${formatTime(clip.end, true)}`}
                   onPointerDown={(e) => startDrag(e, clip, "move")}>
+                  {clip.estimated && <b className="est">⚠️</b>}
                   {thumb && <img src={thumb} alt="" draggable={false} />}
-                  <span dir="rtl">{clip.kind === "video" ? "🎞️" : "🖼️"} {clip.description}</span>
+                  <span dir="rtl">{clip.page ? "📄" : clip.kind === "video" ? "🎞️" : "🖼️"} {clip.description}</span>
                   <div className="handle start" onPointerDown={(e) => startDrag(e, clip, "start")} />
                   <div className="handle end" onPointerDown={(e) => startDrag(e, clip, "end")} />
                 </div>
@@ -127,10 +129,22 @@ export default function TimelineView(props: Props) {
             ))}
             {timeline.cuts.map((cut) => (
               <div key={cut.id}
-                className={`cut ${selection?.type === "cut" && selection.id === cut.id ? "selected" : ""}`}
+                className={`cut ${cut.auto ? "auto" : ""} ${selection?.type === "cut" && selection.id === cut.id ? "selected" : ""}`}
                 style={{ left: cut.start * pps, width: Math.max((cut.end - cut.start) * pps, 3) }}
-                title="جزء مقصوص (اضغط عليه عشان ترجّعه)"
+                title={`${cut.auto === "silence" ? "سكتة مقصوصة" : cut.auto === "retake" ? "لغبطة مقصوصة (جملة اتعادت)" : "جزء مقصوص"} (اضغط عليه عشان ترجّعه)`}
                 onPointerDown={(e) => { e.stopPropagation(); props.onSelect({ type: "cut", id: cut.id }); }} />
+            ))}
+          </div>
+
+          <div className="track captions-track" onPointerDown={(e) => { props.onSeek(timeAt(e.clientX)); props.onSelect(null); }}>
+            {timeline.captions.map((cap) => (
+              <div key={cap.id}
+                className={`caption-block ${timeline.caption_style.enabled ? "" : "off"} ${selection?.type === "caption" && selection.id === cap.id ? "selected" : ""}`}
+                style={{ left: cap.start * pps, width: Math.max((cap.end - cap.start) * pps, 3) }}
+                title={cap.text}
+                onPointerDown={(e) => { e.stopPropagation(); props.onSeek(cap.start); props.onSelect({ type: "caption", id: cap.id }); }}>
+                <span dir="rtl">{cap.text}</span>
+              </div>
             ))}
           </div>
 

@@ -74,10 +74,8 @@ if errorlevel 1 (
 )
 
 echo Building the interface ...
-pushd frontend
-call npm install
-if errorlevel 1 (popd & goto :error)
-call npm run build
+pushd backend
+"..\.venv\Scripts\python.exe" -m montage.updater
 if errorlevel 1 (popd & goto :error)
 popd
 

@@ -11,7 +11,8 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import jobs, pipeline, settings, stock, storage
+from . import captions, edits, jobs, pipeline, settings, stock, storage
+from .timeline import fix_overlaps, normalize, page_clips
 from .media import FFmpegMissing, ffmpeg_bin
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -26,6 +27,11 @@ def _project(project_id: str) -> Path:
         return storage.project_dir(project_id)
     except storage.NotFound:
         raise HTTPException(404, "المشروع مش موجود")
+
+
+def _timeline(path: Path) -> dict | None:
+    timeline = storage.read_json(path / "timeline.json")
+    return normalize(timeline) if timeline else None
 
 
 def _save_upload(upload: UploadFile, target: Path) -> None:
@@ -77,7 +83,8 @@ def get_project(project_id: str):
         "recording": storage.read_json(path / "recording.json"),
         "has_transcript": (path / "transcript.json").exists(),
         "alignment": storage.read_json(path / "alignment.json"),
-        "timeline": storage.read_json(path / "timeline.json"),
+        "timeline": _timeline(path),
+        "pages": {str(n): p["file"] for n, p in storage.list_pages(path).items()},
         "exports": sorted((f"exports/{p.name}" for p in (path / "exports").glob("*.mp4")), reverse=True),
         "jobs": jobs.for_project(project_id),
     }
@@ -175,11 +182,92 @@ def get_job(job_id: str):
 @app.put("/api/projects/{project_id}/timeline")
 def save_timeline(project_id: str, timeline: dict = Body(...)):
     path = _project(project_id)
-    if not isinstance(timeline.get("clips"), list) or "duration" not in timeline:
+    if not isinstance(timeline.get("clips"), list) or "duration" not in timeline or "base" not in timeline:
         raise HTTPException(400, "التايم لاين مش سليم")
-    storage.write_json(path / "timeline.json", timeline)
+    storage.write_json(path / "timeline.json", normalize(timeline))
     storage.update_meta(project_id)
     return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/auto-cuts")
+def auto_cuts(project_id: str, body: dict = Body(default={})):
+    """القص التلقائي من جديد (السكتات و/أو اللغبطة). الواجهة بتحطه في التايم لاين فيترجع بـ Undo."""
+    path = _project(project_id)
+    timeline = _timeline(path)
+    if not timeline:
+        raise HTTPException(409, "اعمل التجهيز الأوتوماتيك الأول.")
+    try:
+        words = pipeline.transcript_words(path)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    min_gap = float(body.get("min_gap") or edits.SILENCE_MIN)
+    cuts = edits.auto_cuts(words, timeline["duration"], silence=body.get("silence", True),
+                           retakes=body.get("retakes", True), min_gap=max(min_gap, 0.3))
+    return {"cuts": cuts}
+
+
+@app.post("/api/projects/{project_id}/captions")
+def rebuild_captions(project_id: str, body: dict = Body(default={})):
+    """سطور الترجمة من التفريغ من جديد."""
+    path = _project(project_id)
+    try:
+        words = pipeline.transcript_words(path)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    max_words = int(body.get("max_words") or captions.MAX_WORDS)
+    return {"captions": captions.build_captions(words, max(2, min(max_words, 12)))}
+
+
+@app.post("/api/projects/{project_id}/pages")
+def upload_pages(project_id: str, files: list[UploadFile] = File(...)):
+    """صور صفحات اللوحة. رقم الصفحة من اسم الملف (مثلًا «صفحة 3.png» أو «3.jpg»)."""
+    path = _project(project_id)
+    (path / "media").mkdir(exist_ok=True)
+    skipped: list[str] = []
+    for upload in files:
+        name = upload.filename or ""
+        ext = Path(name).suffix.lower()
+        number = storage.page_number(name)
+        if ext not in storage.PAGE_TYPES or number is None:
+            skipped.append(name)
+            continue
+        for old in (path / "media").glob(f"page_{number}.*"):
+            old.unlink()
+        _save_upload(upload, path / "media" / f"page_{number}{ext}")
+    return {"pages": {str(n): p["file"] for n, p in storage.list_pages(path).items()}, "skipped": skipped}
+
+
+@app.delete("/api/projects/{project_id}/pages/{number}")
+def delete_page(project_id: str, number: int):
+    path = _project(project_id)
+    for old in (path / "media").glob(f"page_{number}.*"):
+        old.unlink()
+    return {"pages": {str(n): p["file"] for n, p in storage.list_pages(path).items()}}
+
+
+@app.post("/api/projects/{project_id}/insert-pages")
+def insert_pages(project_id: str, timeline: dict = Body(...)):
+    """يحط صور الصفحات في أول كل قسم في التايم لاين الحالي ويرجّعه (من غير ما يحفظ)."""
+    path = _project(project_id)
+    script = storage.read_json(path / "script.json")
+    alignment = storage.read_json(path / "alignment.json")
+    if not script or not alignment:
+        raise HTTPException(409, "اعمل التجهيز الأوتوماتيك الأول.")
+    timeline = normalize(timeline)
+    timings = {t["paragraph_id"]: t for t in alignment}
+    new_pages = page_clips(script, timings, storage.list_pages(path), timeline["duration"])
+    if not new_pages:
+        raise HTTPException(400, "مافيش صور صفحات مرفوعة، أو أقسام السكريبت مافيهاش «صفحة N».")
+    others = [c for c in timeline["clips"] if not c.get("page")]
+    # اللقطات اللي بتبدأ جوه صورة صفحة بتتأخر لحد ما الصفحة تخلص
+    for clip in others:
+        for page in new_pages:
+            if page["start"] <= clip["start"] < page["end"]:
+                length = clip["end"] - clip["start"]
+                clip["start"] = page["end"]
+                clip["end"] = clip["start"] + length
+    timeline["clips"] = fix_overlaps(new_pages + others, timeline["duration"])
+    return timeline
 
 
 @app.get("/api/projects/{project_id}/search")
@@ -240,6 +328,8 @@ def project_file(project_id: str, file_path: str):
         raise HTTPException(404, "الملف مش موجود")
     return FileResponse(target)
 
+
+app.mount("/fonts", StaticFiles(directory=captions.FONTS_DIR), name="fonts")
 
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")

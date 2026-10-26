@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import httpx
+
+RETRY_STATUS = (429, 503)
+RETRY_WAITS = (2, 5, 10, 20)  # ثواني: Pixabay بيقفل مؤقتًا لو نزّلنا بسرعة
 
 
 class StockError(RuntimeError):
@@ -74,14 +78,22 @@ def download(candidate: dict, media_dir: Path) -> str:
     if target.exists() and target.stat().st_size > 0:
         return name
     tmp = target.with_suffix(target.suffix + ".part")
-    try:
-        with httpx.stream("GET", candidate["url"], timeout=120, follow_redirects=True) as response:
-            response.raise_for_status()
-            with tmp.open("wb") as handle:
-                for chunk in response.iter_bytes(1 << 16):
-                    handle.write(chunk)
-    except httpx.HTTPError as exc:
-        tmp.unlink(missing_ok=True)
-        raise StockError(f"فشل تنزيل اللقطة: {exc}") from exc
+    for attempt, wait in enumerate((*RETRY_WAITS, None)):
+        try:
+            with httpx.stream("GET", candidate["url"], timeout=120, follow_redirects=True) as response:
+                if response.status_code in RETRY_STATUS and wait is not None:
+                    retry_after = response.headers.get("Retry-After", "")
+                    time.sleep(min(float(retry_after), 60) if retry_after.isdigit() else wait)
+                    continue
+                if response.status_code == 429:
+                    raise StockError("الموقع بيقول طلبات كتير. استنى دقيقة واضغط «هات اللقطات».")
+                response.raise_for_status()
+                with tmp.open("wb") as handle:
+                    for chunk in response.iter_bytes(1 << 16):
+                        handle.write(chunk)
+            break
+        except httpx.HTTPError as exc:
+            tmp.unlink(missing_ok=True)
+            raise StockError(f"فشل تنزيل اللقطة: {exc}") from exc
     tmp.replace(target)
     return name

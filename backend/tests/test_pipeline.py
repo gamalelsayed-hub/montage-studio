@@ -68,12 +68,21 @@ def test_process_and_export(project, monkeypatch):
     monkeypatch.setattr(stock, "search", fake_search)
     monkeypatch.setattr(stock, "download", fake_download)
 
+    # صورة صفحة ١ من اللوحة
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=1600x1000",
+                    "-frames:v", "1", str(path / "media" / "page_1.png")], check=True)
+
     result = pipeline.process(project_id, Ctx())
     assert result["matched"] == len(spoken)
+    assert result["pages"] == 1 and result["captions"] > 0
     timeline = storage.read_json(path / "timeline.json")
-    assert len(timeline["clips"]) == len(script["shots"]) == 11
+    shots = [c for c in timeline["clips"] if not c["page"]]
+    assert len(shots) == len(script["shots"]) == 11
     assert all(c["media"] for c in timeline["clips"])
-    assert all(c["query"] for c in timeline["clips"])
+    assert all(c["query"] for c in shots)
+    page = next(c for c in timeline["clips"] if c["page"])
+    assert page["page"] == 1 and page["fit"] == "contain" and page["media"]["file"] == "page_1.png"
+    assert timeline["captions"] and timeline["caption_style"]["enabled"]
 
     timeline["cuts"] = [{"id": "cut1", "start": 1.0, "end": 2.0}]
     storage.write_json(path / "timeline.json", timeline)
@@ -81,6 +90,7 @@ def test_process_and_export(project, monkeypatch):
     info = probe(path / exported["file"])
     assert (info["width"], info["height"]) == (1080, 1920)
     assert abs(info["duration"] - (duration - 1.0)) < 0.5
+    assert (path / "captions.ass").exists()
 
 
 def test_find_recording_ignores_info_file(tmp_path):

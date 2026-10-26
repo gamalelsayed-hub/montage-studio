@@ -19,9 +19,23 @@ DEFAULTS: dict = {
     "whisper_model": "large-v3",
     "whisper_device": "auto",  # auto | cuda | cpu
     "default_aspect": "9:16",
+    # توليد الصور بالذكاء الاصطناعي (النسخة التالتة)
+    "openai_api_key": "",
+    "openai_image_model": "gpt-image-1",
+    # قالب الهوية: بيتطبق على الترجمة والعنوان واللوجو في كل الفيديوهات
+    "brand": {
+        "primary_color": "#13202E",
+        "accent_color": "#1E6B47",
+        "text_color": "#FFFFFF",
+        "font": "Tajawal",
+        "logo_position": "top-right",  # top-right | top-left | bottom-right | bottom-left
+        "logo_size": 0.16,             # نسبة من عرض الفيديو
+        "logo_opacity": 0.9,
+    },
 }
 
-SECRET_KEYS = ("pixabay_api_key", "pexels_api_key", "anthropic_api_key")
+SECRET_KEYS = ("pixabay_api_key", "pexels_api_key", "anthropic_api_key", "openai_api_key")
+BRAND_DIR = ROOT / "brand"  # اللوجو بيتحفظ هنا (ومش بيترفع على GitHub)
 _lock = threading.Lock()
 
 
@@ -32,6 +46,7 @@ def load() -> dict:
             data.update(json.loads(SETTINGS_FILE.read_text(encoding="utf-8")))
         except json.JSONDecodeError:
             pass
+    data["brand"] = {**DEFAULTS["brand"], **(data.get("brand") or {})}
     if not Path(data["projects_dir"]).parent.exists():
         # الفولدر اتنقل لمكان تاني: نرجع لفولدر projects جنب البرنامج
         data["projects_dir"] = DEFAULTS["projects_dir"]
@@ -67,3 +82,8 @@ def projects_dir() -> Path:
     path = Path(load()["projects_dir"])
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def brand_logo() -> Path | None:
+    logos = sorted(BRAND_DIR.glob("logo.*")) if BRAND_DIR.exists() else []
+    return logos[0] if logos else None

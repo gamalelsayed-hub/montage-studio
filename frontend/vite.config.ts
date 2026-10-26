@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       "/api": "http://127.0.0.1:8765",
       "/files": "http://127.0.0.1:8765",
+      "/fonts": "http://127.0.0.1:8765",
     },
   },
 });
