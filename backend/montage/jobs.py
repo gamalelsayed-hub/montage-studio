@@ -60,3 +60,8 @@ def get(job_id: str) -> dict | None:
 def for_project(project_id: str) -> list[dict]:
     with _lock:
         return [dict(j) for j in _jobs.values() if j["project_id"] == project_id]
+
+
+def any_running() -> bool:
+    with _lock:
+        return any(j["status"] == "running" for j in _jobs.values())

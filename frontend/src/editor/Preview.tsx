@@ -8,8 +8,9 @@ export interface PreviewBrand {
   logoPosition: string;
   logoSize: number;
   logoOpacity: number;
-  title: string | null; // اسم الفيديو لو العنوان شغال
+  title: string | null; // اسم الفيديو (بيظهر لو العنوان شغال في المشروع)
   primary: string;
+  accent: string;
   text: string;
   font: string;
 }
@@ -41,7 +42,7 @@ const Preview = forwardRef<HTMLVideoElement & HTMLAudioElement, Props>(function 
   const scale = frameWidth / 1080;
   const captionPos =
     style.position === "top" ? { top: "10%" } : style.position === "middle" ? { top: "45%" } : { bottom: "16%" };
-  const showTitle = brand?.title && time < 3.2;
+  const showTitle = brand?.title && timeline.brand.title && time < 3.2;
   const logoPos = brand?.logoPosition ?? "top-right";
 
   return (
@@ -73,7 +74,7 @@ const Preview = forwardRef<HTMLVideoElement & HTMLAudioElement, Props>(function 
       )}
       {showTitle && brand && (
         <div className="preview-title" style={{ fontFamily: brand.font || style.font, fontSize: style.size * 1.35 * scale }}>
-          <span style={{ background: brand.primary, color: brand.text }}>{brand.title}</span>
+          <span style={{ background: brand.accent, color: brand.text }}>{brand.title}</span>
         </div>
       )}
       {cueText && <div className="cue-badge">🗒️ {cueText}</div>}

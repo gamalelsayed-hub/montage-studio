@@ -79,9 +79,13 @@ pushd backend
 if errorlevel 1 (popd & goto :error)
 popd
 
+echo Creating the Desktop icon ...
+call make_shortcut.bat
+
 echo.
 echo ================================================
-echo   Done! Double-click start.bat to open the app.
+echo   Done! Open the app from the "Montage Studio"
+echo   icon on your Desktop (or double-click start.bat).
 echo ================================================
 pause
 exit /b 0

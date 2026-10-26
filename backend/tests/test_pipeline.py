@@ -98,3 +98,28 @@ def test_find_recording_ignores_info_file(tmp_path):
     assert storage.find_recording(tmp_path) is None
     (tmp_path / "recording.mov").write_bytes(b"x")
     assert storage.find_recording(tmp_path).name == "recording.mov"
+
+
+def test_generate_missing_fills_empty_clips(project, monkeypatch):
+    from montage import imagegen
+
+    project_id, path, _ = project
+    storage.write_json(path / "timeline.json", {
+        "aspect": "9:16", "duration": 10, "base": {"file": "a.wav"},
+        "clips": [{"id": "a", "description": "سوق قديم", "media": None, "page": None, "motion": "none"},
+                  {"id": "b", "description": "خزنة", "media": {"file": "x.jpg"}, "page": None},
+                  {"id": "c", "description": "ورشة", "media": None, "page": None}]})
+    asked = []
+
+    def fake_generate(description, aspect, config, media_dir):
+        asked.append(description)
+        if description == "ورشة":
+            raise imagegen.ImageGenError("OpenAI رفض الوصف ده.")
+        return {"file": "ai_1.png", "kind": "image", "source": "ai"}
+
+    monkeypatch.setattr(imagegen, "generate", fake_generate)
+    result = pipeline.generate_missing(project_id, Ctx())
+    assert asked == ["سوق قديم", "ورشة"]
+    assert result["filled"] == 1 and len(result["warnings"]) == 1
+    clips = storage.read_json(path / "timeline.json")["clips"]
+    assert clips[0]["media"]["source"] == "ai" and clips[0]["motion"] == "zoom_in"

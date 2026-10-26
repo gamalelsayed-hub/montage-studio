@@ -106,7 +106,7 @@ export interface Script {
 export interface Job {
   id: string;
   project_id: string;
-  kind: "process" | "export" | "fetch";
+  kind: "process" | "export" | "fetch" | "generate";
   status: "running" | "done" | "error";
   progress: number;
   message: string;
@@ -127,13 +127,29 @@ export interface ProjectData {
   jobs: Job[];
 }
 
+export interface Brand {
+  primary_color: string;
+  accent_color: string;
+  text_color: string;
+  font: string;
+  logo_position: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  logo_size: number;
+  logo_opacity: number;
+}
+
 export interface Settings {
   pixabay_api_key: string;
   pexels_api_key: string;
   anthropic_api_key: string;
+  openai_api_key: string;
+  openai_image_model: string;
   has_pixabay_api_key: boolean;
   has_pexels_api_key: boolean;
   has_anthropic_api_key: boolean;
+  has_openai_api_key: boolean;
+  brand: Brand;
+  has_logo: boolean;
+  fonts: string[];
   projects_dir: string;
   whisper_model: string;
   whisper_device: string;

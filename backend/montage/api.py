@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import captions, edits, jobs, pipeline, settings, stock, storage
+from . import captions, edits, imagegen, jobs, pipeline, settings, stock, storage
 from .timeline import fix_overlaps, normalize, page_clips
 from .media import FFmpegMissing, ffmpeg_bin
 
@@ -49,6 +49,8 @@ def get_settings():
         data["ffmpeg_ok"] = True
     except FFmpegMissing:
         data["ffmpeg_ok"] = False
+    data["has_logo"] = settings.brand_logo() is not None
+    data["fonts"] = list(captions.FONTS)
     return data
 
 
@@ -165,6 +167,17 @@ def export(project_id: str):
     _project(project_id)
     try:
         return jobs.start(project_id, "export", lambda ctx: pipeline.export(project_id, ctx))
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@app.post("/api/projects/{project_id}/generate-missing")
+def generate_missing(project_id: str):
+    _project(project_id)
+    if not settings.load().get("openai_api_key"):
+        raise HTTPException(400, "مفيش مفتاح OpenAI. حطه من ⚙️ الإعدادات عشان تولّد صور.")
+    try:
+        return jobs.start(project_id, "generate", lambda ctx: pipeline.generate_missing(project_id, ctx))
     except RuntimeError as exc:
         raise HTTPException(409, str(exc))
 
@@ -296,6 +309,53 @@ def choose_media(project_id: str, body: dict = Body(...)):
     except stock.StockError as exc:
         raise HTTPException(400, str(exc))
     return {"media": clip["media"], "kind": clip["kind"]}
+
+
+@app.post("/api/projects/{project_id}/generate-image")
+def generate_image(project_id: str, body: dict = Body(...)):
+    """صورة بالذكاء الاصطناعي من وصف اللقطة (بتاخد من 10 لـ 40 ثانية)."""
+    path = _project(project_id)
+    description = (body.get("description") or "").strip()
+    if not description:
+        raise HTTPException(400, "اكتب وصف للصورة الأول.")
+    meta = storage.read_json(path / "project.json")
+    try:
+        media_info = imagegen.generate(description, meta["aspect"], settings.load(), path / "media")
+    except imagegen.ImageGenError as exc:
+        raise HTTPException(400, str(exc))
+    return {"media": media_info, "kind": "image"}
+
+
+# ---------- قالب الهوية ----------
+
+LOGO_TYPES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+@app.post("/api/brand/logo")
+def upload_logo(file: UploadFile = File(...)):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in LOGO_TYPES:
+        raise HTTPException(400, "اللوجو لازم يبقى صورة PNG (يفضّل بخلفية شفافة) أو JPG.")
+    settings.BRAND_DIR.mkdir(exist_ok=True)
+    for old in settings.BRAND_DIR.glob("logo.*"):
+        old.unlink()
+    _save_upload(file, settings.BRAND_DIR / f"logo{ext}")
+    return {"ok": True}
+
+
+@app.delete("/api/brand/logo")
+def delete_logo():
+    for old in settings.BRAND_DIR.glob("logo.*") if settings.BRAND_DIR.exists() else []:
+        old.unlink()
+    return {"ok": True}
+
+
+@app.get("/api/brand/logo")
+def get_logo():
+    logo = settings.brand_logo()
+    if not logo:
+        raise HTTPException(404, "مافيش لوجو")
+    return FileResponse(logo, headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/projects/{project_id}/upload-media")
