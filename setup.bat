@@ -63,9 +63,15 @@ echo Installing Python packages (this can take a few minutes) ...
 ".venv\Scripts\python.exe" -m pip install -r backend\requirements.txt
 if errorlevel 1 goto :error
 
-echo Installing NVIDIA libraries for fast transcription on the graphics card ...
-".venv\Scripts\python.exe" -m pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*"
-if errorlevel 1 echo (Skipped: transcription will use the CPU instead. That is OK, just slower.)
+rem NVIDIA libraries (about 1.3 GB) are only needed when there is an NVIDIA card
+where nvidia-smi >nul 2>nul
+if errorlevel 1 (
+  echo No NVIDIA graphics card found: transcription will run on the processor.
+) else (
+  echo Installing NVIDIA libraries for fast transcription on the graphics card ...
+  ".venv\Scripts\python.exe" -m pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*"
+  if errorlevel 1 echo Skipped: transcription will use the processor instead. That is OK, just slower.
+)
 
 echo Building the interface ...
 pushd frontend

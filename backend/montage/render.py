@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
-from .media import _NO_WINDOW, ffmpeg_bin, has_nvenc
+from .media import _NO_WINDOW, ffmpeg_bin, hardware_encoders
 from .timeline import kept_duration, merge_cuts
 
 SIZES = {"9:16": (1080, 1920), "16:9": (1920, 1080)}
@@ -117,10 +117,12 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
     args += ["-filter_complex", ";".join(filters), "-map", "[vout]", "-map", "[aout]",
              "-t", _fmt(kept_duration(duration, timeline.get("cuts", [])))]
     if encoder == "h264_nvenc":
-        args += ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "21", "-b:v", "0"]
+        args += ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "21", "-b:v", "0", "-pix_fmt", "yuv420p"]
+    elif encoder == "h264_qsv":  # كارت Intel
+        args += ["-c:v", "h264_qsv", "-preset", "medium", "-global_quality", "22", "-pix_fmt", "nv12"]
     else:
-        args += ["-c:v", "libx264", "-preset", "medium", "-crf", "20"]
-    args += ["-pix_fmt", "yuv420p", "-r", str(FPS), "-c:a", "aac", "-b:a", "192k",
+        args += ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p"]
+    args += ["-r", str(FPS), "-c:a", "aac", "-b:a", "192k",
              "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(output)]
     return args
 
@@ -128,7 +130,8 @@ def build_command(timeline: dict, project_dir: Path, output: Path, encoder: str 
 def render(timeline: dict, project_dir: Path, output: Path,
            on_progress: Callable[[float], None] | None = None) -> Path:
     total = kept_duration(float(timeline["duration"]), timeline.get("cuts", [])) or 1.0
-    encoders = (["h264_nvenc"] if has_nvenc() else []) + ["libx264"]
+    # لو التشفير بالكارت فشل (تعريف قديم مثلًا) نرجع للمعالج
+    encoders = hardware_encoders() + ["libx264"]
     last_error = ""
     for encoder in encoders:
         args = build_command(timeline, project_dir, output, encoder)

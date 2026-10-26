@@ -77,9 +77,10 @@ def make_preview(source: Path, target: Path, has_video: bool) -> Path:
     return target
 
 
-def has_nvenc() -> bool:
+def hardware_encoders() -> list[str]:
+    """مشفّرات الفيديو بكارت الشاشة اللي ffmpeg يعرفها: NVIDIA الأول وبعدين Intel."""
     try:
         result = run([ffmpeg_bin(), "-hide_banner", "-encoders"])
     except FFmpegMissing:
-        return False
-    return "h264_nvenc" in result.stdout
+        return []
+    return [name for name in ("h264_nvenc", "h264_qsv") if name in result.stdout]

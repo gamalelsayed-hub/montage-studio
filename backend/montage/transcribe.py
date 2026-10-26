@@ -26,17 +26,30 @@ def _add_cuda_dlls() -> None:
             os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
 
 
+def _has_cuda() -> bool:
+    """فيه كارت NVIDIA شغال؟"""
+    try:
+        import ctranslate2
+
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+def _cpu_model(model_name: str) -> str:
+    """large-v3 على المعالج بطيء جدًا، وturbo أسرع بكتير ودقته قريبة منه."""
+    return "turbo" if model_name.startswith("large") else model_name
+
+
 def _load_model(model_name: str, device: str):
     _add_cuda_dlls()
     from faster_whisper import WhisperModel
 
     attempts: list[tuple[str, str, str]] = []
-    if device in ("auto", "cuda"):
+    if device == "cuda" or (device == "auto" and _has_cuda()):
         attempts.append((model_name, "cuda", "float16"))
     if device in ("auto", "cpu"):
-        # على الـ CPU الموديل الكبير بطيء جدًا، فبنستخدم medium
-        cpu_model = model_name if device == "cpu" else "medium"
-        attempts.append((cpu_model, "cpu", "int8"))
+        attempts.append((model_name if device == "cpu" else _cpu_model(model_name), "cpu", "int8"))
 
     last_error: Exception | None = None
     for name, dev, compute in attempts:
@@ -61,7 +74,9 @@ def transcribe(audio_path: Path, model_name: str = "large-v3", device: str = "au
     prompt = hint_text[:600] if hint_text else None
     segments, info = model.transcribe(
         str(audio_path), language="ar", word_timestamps=True, vad_filter=True,
-        initial_prompt=prompt, beam_size=5,
+        initial_prompt=prompt,
+        # على المعالج: بحث أبسط بيخلّص في نص الوقت، والمطابقة مع السكريبت بتستحمل الغلطات الصغيرة
+        beam_size=5 if used_device == "cuda" else 1,
     )
     words: list[dict] = []
     out_segments: list[dict] = []
