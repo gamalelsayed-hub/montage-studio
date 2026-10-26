@@ -102,7 +102,7 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
       )}
       {clip.media && (
         <p className="muted small">
-          الحالية: {clip.media.source === "upload" ? "من جهازك" : `Pexels${clip.media.author ? ` · ${clip.media.author}` : ""}`}
+          الحالية: {clip.media.source === "upload" ? "من جهازك" : `${clip.media.source === "pixabay" ? "Pixabay" : "Pexels"}${clip.media.author ? ` · ${clip.media.author}` : ""}`}
           {clip.media.page && <> · <a href={clip.media.page} target="_blank" rel="noreferrer">المصدر</a></>}
         </p>
       )}
@@ -127,7 +127,7 @@ export default function Inspector({ projectId, clip, onChange, onDelete }: Props
       {error && <p className="error">{error}</p>}
       <div className="candidates">
         {results.map((c) => {
-          const current = clip.media?.id === c.id && clip.media?.source === "pexels";
+          const current = clip.media?.id === c.id && clip.media?.source === c.source;
           return (
             <button key={`${c.kind}${c.id}`} className={`candidate ${current ? "current" : ""}`}
               onClick={() => choose(c)} disabled={!!busy} title={c.author ?? ""}>

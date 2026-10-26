@@ -28,12 +28,12 @@ export default function Home({ onOpenSettings }: { onOpenSettings: () => void })
 
   return (
     <div className="home">
-      {settings && (!settings.has_pexels_api_key || !settings.ffmpeg_ok) && (
+      {settings && (!(settings.has_pixabay_api_key || settings.has_pexels_api_key) || !settings.ffmpeg_ok) && (
         <div className="banner">
           {!settings.ffmpeg_ok && <div>⚠️ ffmpeg مش متثبت، والتصدير مش هيشتغل. شغّل setup.bat.</div>}
-          {!settings.has_pexels_api_key && (
+          {!(settings.has_pixabay_api_key || settings.has_pexels_api_key) && (
             <div>
-              💡 عشان البرنامج يجيب اللقطات لوحده، حط مفتاح Pexels المجاني.{" "}
+              💡 عشان البرنامج يجيب اللقطات لوحده، حط مفتاح Pixabay المجاني.{" "}
               <button className="link" onClick={onOpenSettings}>افتح الإعدادات</button>
             </div>
           )}

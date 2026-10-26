@@ -36,14 +36,22 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         )}
 
         <label>
-          مفتاح Pexels (للقطات المجانية)
-          <input dir="ltr" value={settings.pexels_api_key} onChange={(e) => set("pexels_api_key", e.target.value)}
+          مفتاح Pixabay (للقطات المجانية)
+          <input dir="ltr" value={settings.pixabay_api_key} onChange={(e) => set("pixabay_api_key", e.target.value)}
             placeholder="الصق المفتاح هنا" />
         </label>
         <p className="hint">
-          ادخل على <a href="https://www.pexels.com/api/" target="_blank" rel="noreferrer">pexels.com/api</a>، اعمل
-          حساب مجاني، واضغط «Your API Key» وانسخ المفتاح.
+          اعمل حساب مجاني على <a href="https://pixabay.com/" target="_blank" rel="noreferrer">pixabay.com</a>، وبعدين
+          افتح <a href="https://pixabay.com/api/docs/" target="_blank" rel="noreferrer">pixabay.com/api/docs</a> وانزل
+          لحد «Parameters»، هتلاقي المفتاح مكتوب جنب key باللون الأخضر. انسخه.
         </p>
+
+        <label>
+          مفتاح Pexels (اختياري، لو عندك واحد قديم)
+          <input dir="ltr" value={settings.pexels_api_key} onChange={(e) => set("pexels_api_key", e.target.value)}
+            placeholder="مش لازم" />
+        </label>
+        <p className="hint">Pexels واقفين إصدار مفاتيح جديدة دلوقتي. لو الاتنين موجودين، البرنامج بيدوّر في Pixabay الأول.</p>
 
         <label>
           مفتاح Claude (اختياري: بيكتب كلمات بحث أدق للقطات)

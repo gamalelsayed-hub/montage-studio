@@ -21,3 +21,4 @@ dist/
 *.tmp
 *.part
 .pytest_cache/
+tools/

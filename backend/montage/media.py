@@ -16,8 +16,12 @@ class FFmpegMissing(RuntimeError):
     pass
 
 
+# setup.bat بينزّل ffmpeg هنا لو مش متثبت على الجهاز
+LOCAL_FFMPEG = Path(__file__).resolve().parents[2] / "tools" / "ffmpeg" / "bin"
+
+
 def ffmpeg_bin(name: str = "ffmpeg") -> str:
-    path = shutil.which(name)
+    path = shutil.which(name) or shutil.which(name, path=str(LOCAL_FFMPEG))
     if not path:
         raise FFmpegMissing(f"{name} مش متثبت أو مش في الـ PATH. شغّل setup.bat تاني.")
     return path

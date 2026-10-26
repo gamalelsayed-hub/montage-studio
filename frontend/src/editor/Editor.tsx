@@ -233,7 +233,7 @@ export default function Editor({ projectId, initial, script, exports, busy, last
               {emptyClips > 0 && (
                 <p className="warn">
                   فيه {emptyClips} لقطة فاضية.{" "}
-                  <button className="link" onClick={fetchNow} disabled={busy}>هات اللقطات من Pexels</button>
+                  <button className="link" onClick={fetchNow} disabled={busy}>هات اللقطات</button>
                 </p>
               )}
             </div>

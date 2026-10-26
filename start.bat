@@ -11,6 +11,7 @@ if not exist "frontend\dist\index.html" (
   pause
   exit /b 1
 )
+if exist "tools\ffmpeg\bin\ffmpeg.exe" set "PATH=%~dp0tools\ffmpeg\bin;%PATH%"
 echo Montage Studio is running at http://127.0.0.1:8765
 echo Keep this window open while you work. Close it to stop the app.
 echo.

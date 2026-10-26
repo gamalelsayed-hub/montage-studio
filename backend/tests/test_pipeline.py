@@ -7,7 +7,7 @@ import subprocess
 import pytest
 
 from conftest import fake_transcript
-from montage import pexels, pipeline, settings, storage, transcribe
+from montage import pipeline, settings, stock, storage, transcribe
 from montage.media import probe
 
 needs_ffmpeg = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg مش متثبت")
@@ -25,7 +25,7 @@ class Ctx:
 def project(tmp_path, monkeypatch, example_script):
     settings_file = tmp_path / "settings.local.json"
     settings_file.write_text(json.dumps({"projects_dir": str(tmp_path / "projects"),
-                                         "pexels_api_key": "test-key"}), encoding="utf-8")
+                                         "pixabay_api_key": "test-key"}), encoding="utf-8")
     monkeypatch.setattr(settings, "SETTINGS_FILE", settings_file)
     meta = storage.create_project("فلوسك حلال ولا حرام", "9:16")
     path = storage.project_dir(meta["id"])
@@ -54,19 +54,19 @@ def test_process_and_export(project, monkeypatch):
                     "-frames:v", "1", str(image)], check=True)
     queries = []
 
-    def fake_search(query, kind, api_key, aspect="9:16", per_page=8):
+    def fake_search(query, kind, config, aspect="9:16", per_page=8):
         queries.append(query)
-        return [{"source": "pexels", "kind": "image", "id": str(len(queries)), "thumb": None,
+        return [{"source": "pixabay", "kind": "image", "id": str(len(queries)), "thumb": None,
                  "url": "https://example.invalid/x.jpg", "author": "test", "page": None}]
 
     def fake_download(candidate, media_dir):
         media_dir.mkdir(parents=True, exist_ok=True)
-        name = f"pexels_image_{candidate['id']}.jpg"
+        name = f"pixabay_image_{candidate['id']}.jpg"
         shutil.copy(image, media_dir / name)
         return name
 
-    monkeypatch.setattr(pexels, "search", fake_search)
-    monkeypatch.setattr(pexels, "download", fake_download)
+    monkeypatch.setattr(stock, "search", fake_search)
+    monkeypatch.setattr(stock, "download", fake_download)
 
     result = pipeline.process(project_id, Ctx())
     assert result["matched"] == len(spoken)

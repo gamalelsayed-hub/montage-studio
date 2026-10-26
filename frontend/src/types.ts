@@ -103,8 +103,10 @@ export interface ProjectData {
 }
 
 export interface Settings {
+  pixabay_api_key: string;
   pexels_api_key: string;
   anthropic_api_key: string;
+  has_pixabay_api_key: boolean;
   has_pexels_api_key: boolean;
   has_anthropic_api_key: boolean;
   projects_dir: string;
