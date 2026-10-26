@@ -11,7 +11,7 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import jobs, pexels, pipeline, settings, storage
+from . import jobs, pipeline, settings, stock, storage
 from .media import FFmpegMissing, ffmpeg_bin
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -189,15 +189,15 @@ def search(project_id: str, q: str, kind: str = "image"):
     from .content_rules import apply_to_query
     query = apply_to_query(q)
     try:
-        results = pexels.search(query, kind, settings.load()["pexels_api_key"], meta["aspect"], per_page=15)
-    except pexels.PexelsError as exc:
+        results = stock.search(query, kind, settings.load(), meta["aspect"], per_page=15)
+    except stock.StockError as exc:
         raise HTTPException(400, str(exc))
     return {"query": query, "results": results}
 
 
 @app.post("/api/projects/{project_id}/clip-media")
 def choose_media(project_id: str, body: dict = Body(...)):
-    """يختار بديل من Pexels للقطة: ينزّله ويرجع بيانات الملف."""
+    """يختار بديل (Pixabay أو Pexels) للقطة: ينزّله ويرجع بيانات الملف."""
     path = _project(project_id)
     candidate = body.get("candidate") or {}
     if candidate.get("kind") not in ("image", "video") or not candidate.get("url"):
@@ -205,14 +205,14 @@ def choose_media(project_id: str, body: dict = Body(...)):
     clip: dict = {"kind": candidate["kind"], "motion": None}
     try:
         pipeline.set_clip_media(clip, candidate, path)
-    except pexels.PexelsError as exc:
+    except stock.StockError as exc:
         raise HTTPException(400, str(exc))
     return {"media": clip["media"], "kind": clip["kind"]}
 
 
 @app.post("/api/projects/{project_id}/upload-media")
 def upload_media(project_id: str, file: UploadFile = File(...)):
-    """صورة أو فيديو من جهازه بدل لقطة Pexels."""
+    """صورة أو فيديو من جهازه بدل لقطة من النت."""
     path = _project(project_id)
     ext = Path(file.filename or "").suffix.lower()
     if ext not in MEDIA_TYPES:

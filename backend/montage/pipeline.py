@@ -1,4 +1,4 @@
-"""الخطوات الأوتوماتيك: تفريغ ← مطابقة ← تايم لاين ← كلمات بحث ← لقطات من Pexels."""
+"""الخطوات الأوتوماتيك: تفريغ ← مطابقة ← تايم لاين ← كلمات بحث ← لقطات (Pixabay / Pexels)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from . import aligner, keywords, media, pexels, settings, storage, transcribe
+from . import aligner, keywords, media, settings, stock, storage, transcribe
 from .jobs import JobContext
 from .render import render
 from .script_parser import parse_script
@@ -45,19 +45,19 @@ def prepare_recording(path: Path) -> dict:
     return info
 
 
-def fetch_clip_media(clip: dict, path: Path, aspect: str, api_key: str) -> None:
+def fetch_clip_media(clip: dict, path: Path, aspect: str, config: dict) -> None:
     """يدوّر على بدائل للقطة وينزّل أول واحدة."""
-    clip["candidates"] = pexels.search(clip["query"], clip["kind"], api_key, aspect)
+    clip["candidates"] = stock.search(clip["query"], clip["kind"], config, aspect)
     if clip["kind"] == "video" and not clip["candidates"]:
         # مالقيناش فيديو؟ نجرّب صورة بنفس الكلمات
-        clip["candidates"] = pexels.search(clip["query"], "image", api_key, aspect)
+        clip["candidates"] = stock.search(clip["query"], "image", config, aspect)
     if clip["candidates"]:
         set_clip_media(clip, clip["candidates"][0], path)
 
 
 def set_clip_media(clip: dict, candidate: dict, path: Path) -> None:
-    file_name = pexels.download(candidate, path / "media")
-    media_info = {"file": file_name, "kind": candidate["kind"], "source": candidate.get("source", "pexels"),
+    file_name = stock.download(candidate, path / "media")
+    media_info = {"file": file_name, "kind": candidate["kind"], "source": candidate.get("source", "stock"),
                   "id": candidate.get("id"), "thumb": candidate.get("thumb"),
                   "author": candidate.get("author"), "page": candidate.get("page")}
     if candidate["kind"] == "video":
@@ -109,18 +109,18 @@ def process(project_id: str, ctx: JobContext, retranscribe: bool = False) -> dic
         clip["query"] = query
 
     warnings: list[str] = []
-    if config["pexels_api_key"]:
+    if stock.has_key(config):
         total = len(timeline["clips"]) or 1
         for index, clip in enumerate(timeline["clips"]):
-            ctx.update(0.7 + 0.29 * index / total, f"بجيب اللقطات من Pexels ({index + 1}/{total})…")
+            ctx.update(0.7 + 0.29 * index / total, f"بجيب اللقطات ({index + 1}/{total})…")
             if not clip["query"]:
                 continue
             try:
-                fetch_clip_media(clip, path, meta["aspect"], config["pexels_api_key"])
-            except pexels.PexelsError as exc:
+                fetch_clip_media(clip, path, meta["aspect"], config)
+            except stock.StockError as exc:
                 warnings.append(f"{clip['description'][:40]}: {exc}")
     else:
-        warnings.append("مفيش مفتاح Pexels، فاللقطات فاضية. حط المفتاح من الإعدادات واضغط «هات اللقطات».")
+        warnings.append("مفيش مفتاح لقطات، فاللقطات فاضية. حط مفتاح Pixabay من الإعدادات واضغط «هات اللقطات».")
     if source == "dictionary" and timeline["clips"]:
         warnings.append("كلمات البحث اتعملت بالقاموس البسيط. لو حطيت مفتاح Claude هتبقى أدق.")
 
@@ -132,12 +132,12 @@ def process(project_id: str, ctx: JobContext, retranscribe: bool = False) -> dic
 
 
 def fetch_missing_media(project_id: str, ctx: JobContext) -> dict:
-    """«هات اللقطات»: لأي لقطة لسه فاضية (مثلًا بعد ما حط مفتاح Pexels)."""
+    """«هات اللقطات»: لأي لقطة لسه فاضية (مثلًا بعد ما حط مفتاح اللقطات)."""
     path = storage.project_dir(project_id)
     meta = storage.read_json(path / "project.json")
     config = settings.load()
-    if not config["pexels_api_key"]:
-        raise RuntimeError("حط مفتاح Pexels من الإعدادات الأول.")
+    if not stock.has_key(config):
+        raise RuntimeError(stock.NO_KEY_MESSAGE)
     timeline = storage.read_json(path / "timeline.json")
     if not timeline:
         raise RuntimeError("اعمل التجهيز الأوتوماتيك الأول.")
@@ -151,8 +151,8 @@ def fetch_missing_media(project_id: str, ctx: JobContext) -> dict:
     for index, clip in enumerate(empty):
         ctx.update(index / max(len(empty), 1), f"بجيب اللقطات ({index + 1}/{len(empty)})…")
         try:
-            fetch_clip_media(clip, path, meta["aspect"], config["pexels_api_key"])
-        except pexels.PexelsError as exc:
+            fetch_clip_media(clip, path, meta["aspect"], config)
+        except stock.StockError as exc:
             warnings.append(str(exc))
     storage.write_json(path / "timeline.json", timeline)
     return {"filled": sum(1 for c in empty if c.get("media")), "warnings": warnings}

@@ -1,4 +1,4 @@
-"""تحويل أوصاف اللقطات (عربي) لكلمات بحث إنجليزي لـ Pexels.
+"""تحويل أوصاف اللقطات (عربي) لكلمات بحث إنجليزي لمواقع اللقطات (Pixabay / Pexels).
 
 لو فيه مفتاح Claude في الإعدادات: Claude بيكتب كلمات البحث (أدق بكتير).
 لو مافيش: قاموس صغير للكلمات الشايعة، والمستخدم يقدر يعدّل كلمة البحث من الواجهة.
@@ -61,7 +61,7 @@ def _claude_queries(descriptions: list[str], api_key: str) -> list[str]:
     prompt = (
         "These are Arabic (Egyptian) descriptions of b-roll shots for a video. For each one, "
         "write a short English stock-footage search query (2-5 words) that will find a good "
-        "match on Pexels. Prefer concrete, visual nouns. If a description offers alternatives "
+        "match on free stock sites (Pixabay, Pexels). Prefer concrete, visual nouns. If a description offers alternatives "
         "('or' / 'أو'), pick the easier one to find.\n"
         f"{PROMPT_RULE}\n\n"
         'Answer with JSON only: {"queries": ["...", "..."]} in the same order.\n\n'

@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_FILE = Path(os.environ.get("MONTAGE_SETTINGS", ROOT / "settings.local.json"))
 
 DEFAULTS: dict = {
+    "pixabay_api_key": "",
     "pexels_api_key": "",
     "anthropic_api_key": "",
     "projects_dir": str(ROOT / "projects"),
@@ -20,7 +21,7 @@ DEFAULTS: dict = {
     "default_aspect": "9:16",
 }
 
-SECRET_KEYS = ("pexels_api_key", "anthropic_api_key")
+SECRET_KEYS = ("pixabay_api_key", "pexels_api_key", "anthropic_api_key")
 _lock = threading.Lock()
 
 

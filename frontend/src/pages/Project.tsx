@@ -174,7 +174,7 @@ export default function ProjectPage({ projectId }: { projectId: string }) {
           <section className="card">
             <h2>التجهيز الأوتوماتيك</h2>
             <p className="muted">
-              البرنامج هيفرّغ كلامك، ويطابقه مع السكريبت، ويجيب لكل [صورة] و[فيديو] لقطة من Pexels ويحطها في ثانيتها.
+              البرنامج هيفرّغ كلامك، ويطابقه مع السكريبت، ويجيب لكل [صورة] و[فيديو] لقطة من Pixabay ويحطها في ثانيتها.
             </p>
             {data.alignment && (
               <p className="muted">آخر مطابقة: {matched} من {data.alignment.length} فقرة اتلقت في التسجيل.</p>

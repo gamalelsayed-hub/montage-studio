@@ -1,16 +1,12 @@
-"""البحث في Pexels وتنزيل اللقطة المختارة."""
+"""البحث في Pexels (صور وفيديو مجانية)."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import httpx
 
+from .stock import StockError
+
 API = "https://api.pexels.com"
-
-
-class PexelsError(RuntimeError):
-    pass
 
 
 def _orientation(aspect: str) -> str:
@@ -20,7 +16,7 @@ def _orientation(aspect: str) -> str:
 def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: int = 8) -> list[dict]:
     """kind: "image" أو "video". بيرجع قايمة بدائل بشكل موحّد."""
     if not api_key:
-        raise PexelsError("مفيش مفتاح Pexels. حطه من شاشة الإعدادات.")
+        raise StockError("مفيش مفتاح Pexels. حطه من شاشة الإعدادات.")
     if not query.strip():
         return []
     path = "/videos/search" if kind == "video" else "/v1/search"
@@ -28,11 +24,11 @@ def search(query: str, kind: str, api_key: str, aspect: str = "9:16", per_page: 
     try:
         response = httpx.get(API + path, params=params, headers={"Authorization": api_key}, timeout=20)
     except httpx.HTTPError as exc:
-        raise PexelsError(f"مش قادر أوصل لـ Pexels: {exc}") from exc
+        raise StockError(f"مش قادر أوصل لـ Pexels: {exc}") from exc
     if response.status_code == 401:
-        raise PexelsError("مفتاح Pexels غلط.")
+        raise StockError("مفتاح Pexels غلط.")
     if response.status_code >= 400:
-        raise PexelsError(f"Pexels رجّع خطأ {response.status_code}")
+        raise StockError(f"Pexels رجّع خطأ {response.status_code}")
     data = response.json()
     if kind == "video":
         return [_video_candidate(v, aspect) for v in data.get("videos", []) if v.get("video_files")]
@@ -67,25 +63,3 @@ def _video_candidate(video: dict, aspect: str) -> dict:
         "duration": video.get("duration"),
         "author": (video.get("user") or {}).get("name"), "page": video.get("url"),
     }
-
-
-def download(candidate: dict, media_dir: Path) -> str:
-    """ينزّل اللقطة لفولدر المشروع ويرجع اسم الملف."""
-    media_dir.mkdir(parents=True, exist_ok=True)
-    ext = ".mp4" if candidate["kind"] == "video" else ".jpg"
-    name = f"pexels_{candidate['kind']}_{candidate['id']}{ext}"
-    target = media_dir / name
-    if target.exists() and target.stat().st_size > 0:
-        return name
-    tmp = target.with_suffix(target.suffix + ".part")
-    try:
-        with httpx.stream("GET", candidate["url"], timeout=120, follow_redirects=True) as response:
-            response.raise_for_status()
-            with tmp.open("wb") as handle:
-                for chunk in response.iter_bytes(1 << 16):
-                    handle.write(chunk)
-    except httpx.HTTPError as exc:
-        tmp.unlink(missing_ok=True)
-        raise PexelsError(f"فشل تنزيل اللقطة: {exc}") from exc
-    tmp.replace(target)
-    return name
