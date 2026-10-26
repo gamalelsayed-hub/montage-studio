@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import wave
 from pathlib import Path
 from typing import Callable
 
@@ -66,6 +67,18 @@ def _load_model(model_name: str, device: str):
     raise RuntimeError(f"مش قادر أشغّل Whisper: {last_error}")
 
 
+def _read_wav(path: Path):
+    """بنقرا الـ WAV اللي ffmpeg طلّعه (مونو 16kHz) بنفسنا بدل مكتبة av،
+    لأن نسخها الجديدة كسرت faster-whisper (open() got an unexpected keyword argument 'metadata_errors')."""
+    import numpy as np
+
+    with wave.open(str(path), "rb") as wav:
+        if wav.getsampwidth() != 2 or wav.getnchannels() != 1 or wav.getframerate() != 16000:
+            return str(path)  # شكل غير متوقع: نسيب faster-whisper يقراه بطريقته
+        frames = wav.readframes(wav.getnframes())
+    return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 def transcribe(audio_path: Path, model_name: str = "large-v3", device: str = "auto",
                hint_text: str = "", on_progress: Callable[[float], None] | None = None) -> dict:
     """بيرجع {"language", "duration", "device", "words": [{word, start, end}], "segments": [...]}."""
@@ -73,7 +86,7 @@ def transcribe(audio_path: Path, model_name: str = "large-v3", device: str = "au
     # أول جزء من السكريبت كتلميح بيساعد Whisper في الكلمات والأسلوب المصري
     prompt = hint_text[:600] if hint_text else None
     segments, info = model.transcribe(
-        str(audio_path), language="ar", word_timestamps=True, vad_filter=True,
+        _read_wav(Path(audio_path)), language="ar", word_timestamps=True, vad_filter=True,
         initial_prompt=prompt,
         # على المعالج: بحث أبسط بيخلّص في نص الوقت، والمطابقة مع السكريبت بتستحمل الغلطات الصغيرة
         beam_size=5 if used_device == "cuda" else 1,
