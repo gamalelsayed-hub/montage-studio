@@ -55,7 +55,7 @@ def open_window() -> subprocess.Popen | None:
         return None
     profile = ROOT / ".edge-profile"  # ملف خاص بالبرنامج، فالشباك بيعيش لوحده عن المتصفح العادي
     return subprocess.Popen([browser, f"--app={URL}", f"--user-data-dir={profile}", "--no-first-run",
-                             "--no-default-browser-check", "--window-size=1440,920"])
+                             "--no-default-browser-check", "--start-maximized"])
 
 
 def setup_logging(to_file: bool) -> None:
